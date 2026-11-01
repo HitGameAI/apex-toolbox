@@ -1,0 +1,31 @@
+name: Bump Upstream
+
+# 实际流程全在 kamalyes/deploy-pipeline 的 go-bump-upstream.yml 里，三十来个 Go 库共用一份
+#
+# 相比原先各仓库手写的版本，关键差别是多了一组闸门：升完依赖先 build + vet + test，
+# 过了才允许推默认分支；没过就开分支提 PR 并把 job 判红
+#
+# [EN] The pipeline lives in go-bump-upstream.yml in kamalyes/deploy-pipeline. A bump must
+# build, vet and test before it may touch the default branch, and otherwise becomes a branch
+# and a pull request
+
+on:
+  repository_dispatch:
+    types: [upstream-updated]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: bump-upstream
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    uses: kamalyes/deploy-pipeline/.github/workflows/go-bump-upstream.yml@master
+    secrets:
+      APP_ID: ${{ secrets.APP_ID }}
+      APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+      GH_GPA_TOKEN: ${{ secrets.GH_GPA_TOKEN }}
+      PIPELINE_SECRETS: ${{ secrets.PIPELINE_SECRETS }}

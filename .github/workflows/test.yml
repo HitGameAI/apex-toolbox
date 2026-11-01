@@ -1,40 +1,34 @@
+name: Test
+
+# 实际流程全在 kamalyes/deploy-pipeline 的 go-library-test.yml 里，所有 Go 库共用一份
+# 改那一份就等于改所有库；本文件只保留触发器与平台选择，Go 版本矩阵由流水线按 go.mod 推导
+#
+# [EN] The pipeline lives in go-library-test.yml in kamalyes/deploy-pipeline; this file only
+# keeps the triggers and the platform choice, and the Go version matrix is derived there
+
 on:
   push:
     branches:
+      - master
+      - main
       - fork-stable
-    paths:
-      - "**"
-      - "!docs/**"
-      - "!**.md"
+      - refactor/fork-stable
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
   pull_request:
-    paths:
-      - "**"
-      - "!docs/**"
-      - "!**.md"
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
 
-name: Test
 jobs:
-  Build:
-    strategy:
-      fail-fast: false
-      matrix:
-        go-version: [1.25.x]
-        platform: [ubuntu-latest]
-    runs-on: ${{ matrix.platform }}
-    steps:
-      - name: Fetch Repository
-        uses: actions/checkout@v5
-
-      - name: Install Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ matrix.go-version }}
-
-      - name: Install gotestsum
-        run: go install gotest.tools/gotestsum@v1.12.3
-
-      - name: Test
-        run: gotestsum -f testname -- ./... -race -count=1 -shuffle=on
-
-      - name: Test with Coverage
-        run: gotestsum -f testname -- ./... -race -count=1 -coverprofile=coverage.txt -covermode=atomic -shuffle=on
+  test:
+    uses: kamalyes/deploy-pipeline/.github/workflows/go-library-test.yml@master
+    with:
+      # 平台按原仓库既有选择保留；要加回 windows/macos 直接改这一行
+      # [EN] The platform set follows the repository's original choice
+      platforms: '["ubuntu-latest"]'
+    secrets:
+      # 显式映射而非 secrets: inherit —— inherit 跨账号调用时拿不到值
+      # [EN] Mapped explicitly rather than with secrets: inherit, which yields nothing across accounts
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

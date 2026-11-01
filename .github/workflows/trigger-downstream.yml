@@ -1,24 +1,37 @@
 name: Trigger Downstream
 
+# 实际流程全在 kamalyes/deploy-pipeline 的 go-trigger-downstream.yml 里，所有 Go 库共用一份
+#
+# 下游清单**不需要配置**：共用流水线直接从真实依赖图推导出谁的 go.mod 直接 require 了
+# 本模块，所以漏通知在机制上不可能发生
+#
+# 只认一级下游：带 // indirect 的传递依赖不算，它们由自己的直接上游在各自那一跳通知到
+#
+# 要覆盖默认行为才用变量：
+#   单个变量   vars.GOLIB_DOWNSTREAM_REPOS
+#   分节总表   vars.GOLIB_CONFIG 的 downstream_repos
+#   全局总表   vars.PIPELINE_CONFIG 的 golib.downstream_repos
+#
+# [EN] The downstream list needs no configuration: the shared pipeline derives it from which
+# repositories require this module directly. Variables only override that default, and the
+# pipeline still reports any gap
+
 on:
   push:
     tags:
       - "v*"
   workflow_dispatch:
     inputs:
-      target_repo:
-        description: "Target downstream repository"
-        required: true
-        type: choice
-        options:
-          - go-logger
-          - go-pbmo
       version:
-        description: "go-toolbox version to dispatch, for example v0.15.0"
-        required: true
+        description: "要通知的版本，留空则用当前 tag 名"
+        required: false
+        type: string
+      only_repos:
+        description: "只通知这几个下游，逗号或空白分隔，可填多个；留空则通知推导出的全部"
+        required: false
         type: string
       create_tag:
-        description: "Create a downstream tag after bumping the selected repository"
+        description: "下游升完依赖后是否自动打 tag，从而把联动继续往下传"
         required: false
         default: false
         type: boolean
@@ -28,56 +41,17 @@ permissions:
   contents: read
 
 jobs:
-  changes:
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    outputs:
-      should-dispatch: ${{ steps.filter.outputs.should-dispatch }}
-    steps:
-      - name: Fetch Repository
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-
-      - name: Check changed files
-        id: filter
-        shell: bash
-        run: |
-          current_tag="${GITHUB_REF_NAME}"
-          previous_tag="$(git tag --sort=-v:refname | grep -v "^${current_tag}$" | head -n 1 || true)"
-
-          if [ -z "${previous_tag}" ]; then
-            echo "should-dispatch=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          changed_files="$(git diff --name-only "${previous_tag}..${current_tag}")"
-          if [ -z "${changed_files}" ]; then
-            echo "should-dispatch=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          if echo "${changed_files}" | grep -Ev '(^docs/|\.md$)' >/dev/null; then
-            echo "should-dispatch=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "should-dispatch=false" >> "$GITHUB_OUTPUT"
-          fi
-
-  dispatch:
-    needs: changes
-    if: always() && (github.event_name == 'workflow_dispatch' || needs.changes.outputs.should-dispatch == 'true')
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        repo:
-          - HitGameAI/apex-pbmo
-    steps:
-      - name: Dispatch to ${{ matrix.repo }}
-        if: github.event_name == 'push' || matrix.repo == format('kamalyes/{0}', inputs.target_repo)
-        uses: peter-evans/repository-dispatch@v3
-        with:
-          token: ${{ secrets.GH_GPA_TOKEN }}
-          repository: ${{ matrix.repo }}
-          event-type: upstream-updated
-          client-payload: >-
-            {"module":"github.com/HitGameAI/apex-toolbox","version":"${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}","sha":"${{ github.sha }}","create_tag":${{ github.event_name == 'workflow_dispatch' && inputs.create_tag || false }},"commit_message":"📦 deps: 同步上游依赖 ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}\n\n- 📦 更新 github.com/HitGameAI/apex-toolbox 到 ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }} (go.mod, go.sum)\n- 🔄 自动联动下游版本标签 (bump-upstream.yml)\n\nsync upstream ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}"}
+  trigger:
+    uses: kamalyes/deploy-pipeline/.github/workflows/go-trigger-downstream.yml@master
+    with:
+      version: ${{ inputs.version }}
+      only-repos: ${{ inputs.only_repos }}
+      create-tag: ${{ inputs.create_tag == true }}
+    secrets:
+      # 跨仓库 dispatch 用不了 GITHUB_TOKEN，它只对本仓库有效，所以这里必须有 App 或 PAT
+      # [EN] GITHUB_TOKEN is scoped to its own repository and cannot dispatch across
+      # repositories, so an App token or a PAT is required
+      APP_ID: ${{ secrets.APP_ID }}
+      APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+      GH_GPA_TOKEN: ${{ secrets.GH_GPA_TOKEN }}
+      PIPELINE_SECRETS: ${{ secrets.PIPELINE_SECRETS }}
