@@ -20,7 +20,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/kamalyes/go-toolbox/pkg/errorx"
+	"github.com/HitGameAI/apex-toolbox/pkg/errorx"
 )
 
 // Request 结构体用于封装 HTTP 请求的相关信息

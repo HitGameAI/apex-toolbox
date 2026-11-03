@@ -3,7 +3,7 @@
  * @Date: 2026-05-09 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
  * @LastEditTime: 2026-05-11 13:22:03
- * @FilePath: \go-sqlbuilder\serializer\proto_json_test.go
+ * @FilePath: \go-toolbox\pkg\sqlbuilder\serializer\proto_json_test.go
  * @Description: 序列化 protobuf 消息为 JSON 字符串 单元测试
  *
  * Copyright (c) 2026 by kamalyes, All Rights Reserved.

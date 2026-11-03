@@ -10,7 +10,7 @@ description: CRC校验计算工具，提供可配置的CRC算法工厂、缓存�
 ## 快速开始
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/crc"
+import "github.com/HitGameAI/apex-toolbox/pkg/crc"
 ```
 
 创建CRC计算器：

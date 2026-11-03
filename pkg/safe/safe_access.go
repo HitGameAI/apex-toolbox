@@ -17,9 +17,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kamalyes/go-toolbox/pkg/convert"
-	"github.com/kamalyes/go-toolbox/pkg/stringx"
-	"github.com/kamalyes/go-toolbox/pkg/types"
+	"github.com/HitGameAI/apex-toolbox/pkg/convert"
+	"github.com/HitGameAI/apex-toolbox/pkg/stringx"
+	"github.com/HitGameAI/apex-toolbox/pkg/types"
 )
 
 // Access 安全访问装饰器

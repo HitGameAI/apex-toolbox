@@ -16,8 +16,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kamalyes/go-toolbox/pkg/syncx"
-	"github.com/kamalyes/go-toolbox/pkg/types"
+	"github.com/HitGameAI/apex-toolbox/pkg/syncx"
+	"github.com/HitGameAI/apex-toolbox/pkg/types"
 )
 
 // 错误信息常量，方便统一维护和复用

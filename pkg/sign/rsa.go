@@ -22,7 +22,7 @@ import (
 	"math/big"
 	"os"
 
-	"github.com/kamalyes/go-toolbox/pkg/errorx"
+	"github.com/HitGameAI/apex-toolbox/pkg/errorx"
 )
 
 // 错误定义

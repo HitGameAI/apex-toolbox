@@ -18,8 +18,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kamalyes/go-toolbox/pkg/random"
-	"github.com/kamalyes/go-toolbox/pkg/syncx"
+	"github.com/HitGameAI/apex-toolbox/pkg/random"
+	"github.com/HitGameAI/apex-toolbox/pkg/syncx"
 )
 
 // SignerClient 是带状态的签名客户端，支持复用 secretKey、算法和签名器，且并发安全。

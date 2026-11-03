@@ -15,7 +15,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/kamalyes/go-toolbox/pkg/syncx"
+	"github.com/HitGameAI/apex-toolbox/pkg/syncx"
 )
 
 // LIFOQueue 实现了 LIFO 队列（栈）

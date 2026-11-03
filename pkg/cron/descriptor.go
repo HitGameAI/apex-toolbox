@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kamalyes/go-toolbox/pkg/mathx"
+	"github.com/HitGameAI/apex-toolbox/pkg/mathx"
 )
 
 // parseCronDescriptor 解析特殊描述符(支持 @every 和 ExpressionAliases 未覆盖的特殊描述符)

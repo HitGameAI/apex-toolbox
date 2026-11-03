@@ -18,10 +18,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/kamalyes/go-argus"
-	"github.com/kamalyes/go-toolbox/pkg/protox"
-	"github.com/kamalyes/go-toolbox/pkg/stringx"
-	"github.com/kamalyes/go-toolbox/pkg/types"
+	validator "github.com/HitGameAI/apex-toolbox/pkg/argus"
+	"github.com/HitGameAI/apex-toolbox/pkg/protox"
+	"github.com/HitGameAI/apex-toolbox/pkg/stringx"
+	"github.com/HitGameAI/apex-toolbox/pkg/types"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )

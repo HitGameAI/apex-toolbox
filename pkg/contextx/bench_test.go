@@ -15,7 +15,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/kamalyes/go-toolbox/pkg/syncx"
+	"github.com/HitGameAI/apex-toolbox/pkg/syncx"
 )
 
 func BenchmarkNewContext(b *testing.B) {

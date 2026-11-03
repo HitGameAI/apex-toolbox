@@ -14,7 +14,7 @@ CRC（Cyclic Redundancy Check）即循环冗余校验码：是数据通信领域
 ## 安装
 
 ```bash
-go get github.com/kamalyes/go-toolbox/pkg/crc
+go get github.com/HitGameAI/apex-toolbox/pkg/crc
 ```
 
 ## 快速开始
@@ -24,7 +24,7 @@ package main
 
 import (
     "fmt"
-    "github.com/kamalyes/go-toolbox/pkg/crc"
+    "github.com/HitGameAI/apex-toolbox/pkg/crc"
 )
 
 func main() {

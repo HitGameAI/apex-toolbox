@@ -16,8 +16,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/kamalyes/go-toolbox/pkg/netx"
-	"github.com/kamalyes/go-toolbox/pkg/useragent"
+	"github.com/HitGameAI/apex-toolbox/pkg/netx"
+	"github.com/HitGameAI/apex-toolbox/pkg/useragent"
 )
 
 // ExtractRequestMetadata 从 HTTP 请求中提取所有元数据

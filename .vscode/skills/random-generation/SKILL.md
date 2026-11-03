@@ -10,7 +10,7 @@ description: 随机生成工具，提供随机数/字符串/字节/时长、数�
 ## 快速开始
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/random"
+import "github.com/HitGameAI/apex-toolbox/pkg/random"
 ```
 
 基本随机：

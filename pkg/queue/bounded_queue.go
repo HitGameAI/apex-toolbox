@@ -16,10 +16,11 @@ package queue
 import (
 	"context"
 	"errors"
-	"github.com/kamalyes/go-toolbox/pkg/mathx"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/HitGameAI/apex-toolbox/pkg/mathx"
 )
 
 var (

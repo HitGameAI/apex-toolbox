@@ -15,7 +15,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/kamalyes/go-argus"
+	validator "github.com/HitGameAI/apex-toolbox/pkg/argus"
 )
 
 // Contains 指定字符是否在字符串中出现过

@@ -15,8 +15,8 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/kamalyes/go-argus"
-	"github.com/kamalyes/go-toolbox/pkg/types"
+	validator "github.com/HitGameAI/apex-toolbox/pkg/argus"
+	"github.com/HitGameAI/apex-toolbox/pkg/types"
 )
 
 // IF 实现三元运算，使用泛型 T

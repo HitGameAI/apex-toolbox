@@ -14,7 +14,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/kamalyes/go-toolbox/pkg/mathx"
+	"github.com/HitGameAI/apex-toolbox/pkg/mathx"
 )
 
 // DomainKeywordBuilder 域名关键词生成器（支持链式调用）

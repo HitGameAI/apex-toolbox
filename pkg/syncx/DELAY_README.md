@@ -19,7 +19,7 @@
 ### 基本用法
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/syncx"
+import "github.com/HitGameAI/apex-toolbox/pkg/syncx"
 
 // 创建一个字符串类型的延迟器
 delayer := syncx.NewDelayer[string]().
@@ -258,7 +258,7 @@ import (
     "math/rand"
     "time"
     
-    "github.com/kamalyes/go-toolbox/pkg/syncx"
+    "github.com/HitGameAI/apex-toolbox/pkg/syncx"
 )
 
 type APIResponse struct {

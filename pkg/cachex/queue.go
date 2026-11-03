@@ -1,0 +1,571 @@
+/*
+ * @Author: kamalyes 501893067@qq.com
+ * @Date: 2025-11-19 00:00:00
+ * @LastEditors: kamalyes 501893067@qq.com
+ * @LastEditTime: 2025-12-21 15:35:16
+ * @FilePath: \go-toolbox\cachex\\queue.go
+ * @Description: Redis队列实现，支持FIFO、优先级队列等多种队列类型
+ *
+ * Copyright (c) 2025 by kamalyes, All Rights Reserved.
+ */
+package cachex
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"strconv"
+	"time"
+
+	"github.com/HitGameAI/apex-toolbox/pkg/idgen"
+	"github.com/HitGameAI/apex-toolbox/pkg/mathx"
+	"github.com/HitGameAI/apex-toolbox/pkg/osx"
+	"github.com/redis/go-redis/v9"
+)
+
+// QueueType 队列类型
+type QueueType string
+
+const (
+	QueueTypeFIFO     QueueType = "fifo"     // 先进先出队列
+	QueueTypeLIFO     QueueType = "lifo"     // 后进先出队列（栈）
+	QueueTypePriority QueueType = "priority" // 优先级队列
+	QueueTypeDelayed  QueueType = "delayed"  // 延时队列
+)
+
+// QueueItem 队列项
+type QueueItem struct {
+	ID         string      `json:"id"`          // 唯一标识
+	Data       interface{} `json:"data"`        // 数据内容
+	Priority   float64     `json:"priority"`    // 优先级（用于优先级队列）
+	DelayTime  int64       `json:"delay_time"`  // 延时时间戳（用于延时队列）
+	CreatedAt  int64       `json:"created_at"`  // 创建时间
+	RetryCount int         `json:"retry_count"` // 重试次数
+}
+
+// QueueConfig 队列配置
+type QueueConfig struct {
+	MaxRetries            int           // 最大重试次数
+	RetryDelay            time.Duration // 重试延迟
+	BatchSize             int           // 批处理大小
+	LockTimeout           time.Duration // 分布式锁超时时间
+	CleanupInterval       time.Duration // 清理间隔
+	EnableDistributedLock bool          // 是否启用分布式锁
+}
+
+// QueueHandler Redis队列处理器
+type QueueHandler struct {
+	client      redis.UniversalClient
+	config      QueueConfig
+	namespace   string                    // 命名空间前缀
+	idGenerator *idgen.SnowflakeGenerator // 雪花算法 ID 生成器
+}
+
+// NewQueueHandler 创建队列处理器
+func NewQueueHandler(client redis.UniversalClient, namespace string, config QueueConfig) *QueueHandler {
+	// 使用 mathx.IfLeZero 设置默认值
+	config.MaxRetries = mathx.IfLeZero(config.MaxRetries, 3)
+	config.RetryDelay = mathx.IfLeZero(config.RetryDelay, time.Second*5)
+	config.BatchSize = mathx.IfLeZero(config.BatchSize, 10)
+	config.LockTimeout = mathx.IfLeZero(config.LockTimeout, time.Minute*5)
+	config.CleanupInterval = mathx.IfLeZero(config.CleanupInterval, time.Minute*10)
+	namespace = mathx.IfNotEmpty(namespace, "queue") // 空 namespace 默认 "queue"
+
+	// 初始化雪花算法 ID 生成器
+	workerID := osx.GetWorkerIdForSnowflake()
+	datacenterID := osx.GetDatacenterId()
+
+	return &QueueHandler{
+		client:      client,
+		config:      config,
+		namespace:   namespace,
+		idGenerator: idgen.NewSnowflakeGenerator(workerID, datacenterID),
+	}
+}
+
+// getQueueKey 获取队列键名（用 string + 替代 fmt.Sprintf，零分配）
+func (q *QueueHandler) getQueueKey(queueName string, queueType QueueType) string {
+	return q.namespace + ":queue:" + string(queueType) + ":" + queueName
+}
+
+// getLockKey 获取锁键名
+func (q *QueueHandler) getLockKey(queueName string) string {
+	return q.namespace + ":lock:queue:" + queueName
+}
+
+// getDelayKey 获取延时队列键名
+func (q *QueueHandler) getDelayKey(queueName string) string {
+	return q.namespace + ":delay:" + queueName
+}
+
+// Enqueue 入队操作
+func (q *QueueHandler) Enqueue(ctx context.Context, queueName string, queueType QueueType, item *QueueItem) error {
+	if item.ID == "" {
+		// 使用雪花算法生成全局唯一 ID，避免时间戳碰撞
+		item.ID = strconv.FormatInt(q.idGenerator.Generate(), 10)
+	}
+	if item.CreatedAt == 0 {
+		item.CreatedAt = time.Now().Unix()
+	}
+
+	data, err := json.Marshal(item)
+	if err != nil {
+		return fmt.Errorf("failed to marshal queue item: %w", err)
+	}
+
+	queueKey := q.getQueueKey(queueName, queueType)
+
+	switch queueType {
+	case QueueTypeFIFO:
+		// FIFO: RPush + LPop, 右边入队，左边出队，先进先出
+		return q.client.RPush(ctx, queueKey, data).Err()
+	case QueueTypeLIFO:
+		// LIFO: LPush + LPop, 左边入栈，左边出栈，后进先出
+		return q.client.LPush(ctx, queueKey, data).Err()
+	case QueueTypePriority:
+		return q.client.ZAdd(ctx, queueKey, redis.Z{
+			Score:  item.Priority,
+			Member: data,
+		}).Err()
+	case QueueTypeDelayed:
+		delayKey := q.getDelayKey(queueName)
+		executeTime := time.Now().Unix() + item.DelayTime
+		return q.client.ZAdd(ctx, delayKey, redis.Z{
+			Score:  float64(executeTime),
+			Member: data,
+		}).Err()
+	default:
+		return fmt.Errorf("unsupported queue type: %s", queueType)
+	}
+}
+
+// Dequeue 出队操作
+func (q *QueueHandler) Dequeue(ctx context.Context, queueName string, queueType QueueType) (*QueueItem, error) {
+	return q.dequeueWithTimeout(ctx, queueName, queueType, time.Second*5)
+}
+
+// DequeueNonBlocking 非阻塞出队操作
+func (q *QueueHandler) DequeueNonBlocking(ctx context.Context, queueName string, queueType QueueType) (*QueueItem, error) {
+	return q.dequeueWithTimeout(ctx, queueName, queueType, 0)
+}
+
+// dequeueWithTimeout 带超时的出队操作
+func (q *QueueHandler) dequeueWithTimeout(ctx context.Context, queueName string, queueType QueueType, timeout time.Duration) (*QueueItem, error) {
+	queueKey := q.getQueueKey(queueName, queueType)
+
+	var result []string
+	var err error
+
+	switch queueType {
+	case QueueTypeFIFO:
+		// FIFO: RPush + LPop, 左边出队
+		if timeout > 0 {
+			result, err = q.client.BLPop(ctx, timeout, queueKey).Result()
+		} else {
+			data, popErr := q.client.LPop(ctx, queueKey).Result()
+			if popErr != nil {
+				if popErr == redis.Nil {
+					return nil, nil
+				}
+				return nil, popErr
+			}
+			result = []string{"", data}
+		}
+	case QueueTypeLIFO:
+		if timeout > 0 {
+			result, err = q.client.BLPop(ctx, timeout, queueKey).Result()
+		} else {
+			data, popErr := q.client.LPop(ctx, queueKey).Result()
+			if popErr != nil {
+				if popErr == redis.Nil {
+					return nil, nil
+				}
+				return nil, popErr
+			}
+			result = []string{"", data}
+		}
+	case QueueTypePriority:
+		// 获取最高优先级的元素
+		zResult, zErr := q.client.ZPopMax(ctx, queueKey).Result()
+		if zErr != nil {
+			if zErr == redis.Nil {
+				return nil, nil
+			}
+			return nil, zErr
+		}
+		if len(zResult) == 0 {
+			return nil, nil
+		}
+		result = []string{"", zResult[0].Member.(string)}
+	case QueueTypeDelayed:
+		// 处理延时队列
+		return q.processDelayedQueue(ctx, queueName)
+	default:
+		return nil, fmt.Errorf("unsupported queue type: %s", queueType)
+	}
+
+	if err != nil {
+		if err == redis.Nil {
+			return nil, nil // 队列为空
+		}
+		return nil, err
+	}
+
+	if len(result) < 2 {
+		return nil, nil
+	}
+
+	var item QueueItem
+	if err := json.Unmarshal([]byte(result[1]), &item); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal queue item: %w", err)
+	}
+
+	return &item, nil
+}
+
+// processDelayedQueue 处理延时队列
+func (q *QueueHandler) processDelayedQueue(ctx context.Context, queueName string) (*QueueItem, error) {
+	delayKey := q.getDelayKey(queueName)
+	now := float64(time.Now().Unix())
+
+	// 获取到期的任务
+	result, err := q.client.ZRangeByScoreWithScores(ctx, delayKey, &redis.ZRangeBy{
+		Min:   "0",
+		Max:   strconv.FormatFloat(now, 'f', 0, 64),
+		Count: 1,
+	}).Result()
+
+	if err != nil {
+		return nil, err
+	}
+
+	if len(result) == 0 {
+		return nil, nil // 没有到期的任务
+	}
+
+	// 删除已处理的任务
+	q.client.ZRem(ctx, delayKey, result[0].Member)
+
+	var item QueueItem
+	if err := json.Unmarshal([]byte(result[0].Member.(string)), &item); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal delayed queue item: %w", err)
+	}
+
+	return &item, nil
+}
+
+// BatchDequeue 批量出队
+func (q *QueueHandler) BatchDequeue(ctx context.Context, queueName string, queueType QueueType, count int) ([]*QueueItem, error) {
+	count = mathx.IfLeZero(count, q.config.BatchSize)
+
+	queueKey := q.getQueueKey(queueName, queueType)
+
+	// 对于FIFO和LIFO，使用Lua脚本一次性批量出队，提升性能
+	if queueType == QueueTypeFIFO || queueType == QueueTypeLIFO {
+		return q.batchDequeueLua(ctx, queueKey, queueType, count)
+	}
+
+	// 其他队列类型使用原有逻辑
+	items := make([]*QueueItem, 0, count)
+	for i := 0; i < count; i++ {
+		item, err := q.DequeueNonBlocking(ctx, queueName, queueType)
+		if err != nil {
+			return items, err
+		}
+		if item == nil {
+			break // 队列为空
+		}
+		items = append(items, item)
+	}
+
+	return items, nil
+}
+
+// batchDequeueLua 使用Lua脚本批量出队
+func (q *QueueHandler) batchDequeueLua(ctx context.Context, queueKey string, queueType QueueType, count int) ([]*QueueItem, error) {
+	// Lua脚本：一次性弹出多个元素
+	luaScript := `
+		local key = KEYS[1]
+		local count = tonumber(ARGV[1])
+		local pop_cmd = ARGV[2]  -- "LPOP" 或 "RPOP"
+		
+		local results = {}
+		for i = 1, count do
+			local value = redis.call(pop_cmd, key)
+			if not value then
+				break
+			end
+			table.insert(results, value)
+		end
+		return results
+	`
+
+	// 根据队列类型选择弹出命令
+	popCmd := "LPOP"
+	if queueType == QueueTypeFIFO {
+		popCmd = "LPOP" // FIFO: 从左边弹出
+	} else if queueType == QueueTypeLIFO {
+		popCmd = "LPOP" // LIFO: 也从左边弹出
+	}
+
+	// 执行Lua脚本
+	result, err := q.client.Eval(ctx, luaScript, []string{queueKey}, count, popCmd).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	// 解析结果
+	resultSlice, ok := result.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("unexpected lua result type")
+	}
+
+	items := make([]*QueueItem, 0, len(resultSlice))
+	for _, data := range resultSlice {
+		dataStr, ok := data.(string)
+		if !ok {
+			continue
+		}
+
+		var item QueueItem
+		if err := json.Unmarshal([]byte(dataStr), &item); err != nil {
+			continue // 跳过无效数据
+		}
+		items = append(items, &item)
+	}
+
+	return items, nil
+}
+
+// Length 获取队列长度
+func (q *QueueHandler) Length(ctx context.Context, queueName string, queueType QueueType) (int64, error) {
+	queueKey := q.getQueueKey(queueName, queueType)
+
+	switch queueType {
+	case QueueTypeFIFO, QueueTypeLIFO:
+		return q.client.LLen(ctx, queueKey).Result()
+	case QueueTypePriority:
+		return q.client.ZCard(ctx, queueKey).Result()
+	case QueueTypeDelayed:
+		delayKey := q.getDelayKey(queueName)
+		return q.client.ZCard(ctx, delayKey).Result()
+	default:
+		return 0, fmt.Errorf("unsupported queue type: %s", queueType)
+	}
+}
+
+// Peek 查看队列头部元素（不移除）
+func (q *QueueHandler) Peek(ctx context.Context, queueName string, queueType QueueType, count int) ([]*QueueItem, error) {
+	count = mathx.IfLeZero(count, 1)
+
+	queueKey := q.getQueueKey(queueName, queueType)
+	var result []string
+	var err error
+
+	switch queueType {
+	case QueueTypeFIFO:
+		// FIFO: RPush + LPop, 直接从左边peek，无需反转
+		result, err = q.client.LRange(ctx, queueKey, 0, int64(count-1)).Result()
+	case QueueTypeLIFO:
+		// LIFO: LPush + LPop, 从左边peek
+		result, err = q.client.LRange(ctx, queueKey, 0, int64(count-1)).Result()
+	case QueueTypePriority:
+		zResult, zErr := q.client.ZRevRangeWithScores(ctx, queueKey, 0, int64(count-1)).Result()
+		if zErr != nil {
+			return nil, zErr
+		}
+		result = make([]string, len(zResult))
+		for i, z := range zResult {
+			result[i] = z.Member.(string)
+		}
+	case QueueTypeDelayed:
+		delayKey := q.getDelayKey(queueName)
+		zResult, zErr := q.client.ZRangeWithScores(ctx, delayKey, 0, int64(count-1)).Result()
+		if zErr != nil {
+			return nil, zErr
+		}
+		result = make([]string, len(zResult))
+		for i, z := range zResult {
+			result[i] = z.Member.(string)
+		}
+	default:
+		return nil, fmt.Errorf("unsupported queue type: %s", queueType)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	items := make([]*QueueItem, 0, len(result))
+	for _, data := range result {
+		var item QueueItem
+		if err := json.Unmarshal([]byte(data), &item); err != nil {
+			continue // 跳过无效数据
+		}
+		items = append(items, &item)
+	}
+
+	return items, nil
+}
+
+// Clear 清空队列
+func (q *QueueHandler) Clear(ctx context.Context, queueName string, queueType QueueType) error {
+	queueKey := q.getQueueKey(queueName, queueType)
+
+	switch queueType {
+	case QueueTypeDelayed:
+		delayKey := q.getDelayKey(queueName)
+		return q.client.Del(ctx, queueKey, delayKey).Err()
+	default:
+		return q.client.Del(ctx, queueKey).Err()
+	}
+}
+
+// Contains 检查队列是否包含特定元素
+func (q *QueueHandler) Contains(ctx context.Context, queueName string, queueType QueueType, itemID string) (bool, error) {
+	// 获取队列长度来确定要检查的元素数量
+	length, err := q.Length(ctx, queueName, queueType)
+	if err != nil {
+		return false, err
+	}
+
+	if length == 0 {
+		return false, nil
+	}
+
+	// 批量检查元素
+	count := int(length)
+	if count > 1000 { // 限制最大检查数量
+		count = 1000
+	}
+
+	items, err := q.Peek(ctx, queueName, queueType, count)
+	if err != nil {
+		return false, err
+	}
+
+	for _, item := range items {
+		if item.ID == itemID {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// RetryFailed 重试失败的任务
+func (q *QueueHandler) RetryFailed(ctx context.Context, queueName string, queueType QueueType, item *QueueItem) error {
+	if item.RetryCount >= q.config.MaxRetries {
+		// 达到最大重试次数，移到失败队列
+		failedKey := fmt.Sprintf("%s:failed:%s", q.namespace, queueName)
+		data, _ := json.Marshal(item)
+		return q.client.LPush(ctx, failedKey, data).Err()
+	}
+
+	// 增加重试次数并重新入队
+	item.RetryCount++
+	item.DelayTime = int64(q.config.RetryDelay.Seconds())
+
+	return q.Enqueue(ctx, queueName, QueueTypeDelayed, item)
+}
+
+// GetFailedItems 获取失败的任务
+func (q *QueueHandler) GetFailedItems(ctx context.Context, queueName string, offset, limit int64) ([]*QueueItem, error) {
+	failedKey := fmt.Sprintf("%s:failed:%s", q.namespace, queueName)
+
+	result, err := q.client.LRange(ctx, failedKey, offset, offset+limit-1).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	items := make([]*QueueItem, 0, len(result))
+	for _, data := range result {
+		var item QueueItem
+		if err := json.Unmarshal([]byte(data), &item); err != nil {
+			continue
+		}
+		items = append(items, &item)
+	}
+
+	return items, nil
+}
+
+// AcquireLock 获取分布式锁
+func (q *QueueHandler) AcquireLock(ctx context.Context, queueName string, workerID string) (bool, error) {
+	// 如果未启用分布式锁，直接返回true
+	if !q.config.EnableDistributedLock {
+		return true, nil
+	}
+
+	lockKey := q.getLockKey(queueName)
+
+	result, err := q.client.SetNX(ctx, lockKey, workerID, q.config.LockTimeout).Result()
+	if err != nil {
+		return false, err
+	}
+
+	return result, nil
+}
+
+// ReleaseLock 释放分布式锁
+func (q *QueueHandler) ReleaseLock(ctx context.Context, queueName string, workerID string) error {
+	// 如果未启用分布式锁，直接返回
+	if !q.config.EnableDistributedLock {
+		return nil
+	}
+
+	lockKey := q.getLockKey(queueName)
+
+	// 使用Lua脚本确保只能释放自己持有的锁
+	script := `
+		if redis.call("GET", KEYS[1]) == ARGV[1] then
+			return redis.call("DEL", KEYS[1])
+		else
+			return 0
+		end
+	`
+
+	return q.client.Eval(ctx, script, []string{lockKey}, workerID).Err()
+}
+
+// Statistics 获取队列统计信息
+type QueueStats struct {
+	QueueName    string `json:"queue_name"`
+	QueueType    string `json:"queue_type"`
+	Length       int64  `json:"length"`
+	DelayedCount int64  `json:"delayed_count,omitempty"`
+	FailedCount  int64  `json:"failed_count"`
+}
+
+// GetStats 获取队列统计信息
+func (q *QueueHandler) GetStats(ctx context.Context, queueName string, queueType QueueType) (*QueueStats, error) {
+	stats := &QueueStats{
+		QueueName: queueName,
+		QueueType: string(queueType),
+	}
+
+	// 获取主队列长度
+	length, err := q.Length(ctx, queueName, queueType)
+	if err != nil {
+		return nil, err
+	}
+	stats.Length = length
+
+	// 获取延时队列长度（如果是延时队列）
+	if queueType == QueueTypeDelayed {
+		delayKey := q.getDelayKey(queueName)
+		delayedCount, err := q.client.ZCard(ctx, delayKey).Result()
+		if err == nil {
+			stats.DelayedCount = delayedCount
+		}
+	}
+
+	// 获取失败队列长度
+	failedKey := fmt.Sprintf("%s:failed:%s", q.namespace, queueName)
+	failedCount, err := q.client.LLen(ctx, failedKey).Result()
+	if err == nil {
+		stats.FailedCount = failedCount
+	}
+
+	return stats, nil
+}

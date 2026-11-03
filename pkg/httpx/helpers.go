@@ -16,8 +16,8 @@ import (
 	"net/http"
 	"reflect"
 
-	"github.com/kamalyes/go-toolbox/pkg/mathx"
-	"github.com/kamalyes/go-argus"
+	validator "github.com/HitGameAI/apex-toolbox/pkg/argus"
+	"github.com/HitGameAI/apex-toolbox/pkg/mathx"
 )
 
 // BuildParams 构建请求参数的辅助方法

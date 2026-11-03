@@ -1,0 +1,545 @@
+/*
+ * @Author: kamalyes 501893067@qq.com
+ * @Date: 2025-11-19 00:00:00
+ * @LastEditors: kamalyes 501893067@qq.com
+ * @LastEditTime: 2026-10-27 09:53:20
+ * @FilePath: \go-toolbox\cachex\\advanced_cache.go
+ * @Description: 高级缓存包装器，支持压缩和泛型，集成队列、热key和分布式锁功能
+ *
+ * Copyright (c) 2025 by kamalyes, All Rights Reserved.
+ */
+package cachex
+
+import (
+	"bytes"
+	"compress/gzip"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/HitGameAI/apex-toolbox/pkg/logger"
+	"github.com/HitGameAI/apex-toolbox/pkg/mathx"
+	"github.com/redis/go-redis/v9"
+)
+
+// CompressionType 压缩类型
+type CompressionType string
+
+const (
+	CompressionNone CompressionType = "none"
+	CompressionGzip CompressionType = "gzip"
+)
+
+// AdvancedCacheConfig 高级缓存配置
+type AdvancedCacheConfig struct {
+	Compression        CompressionType // 压缩类型
+	MinSizeForCompress int             // 启用压缩的最小大小（字节）
+	DefaultTTL         time.Duration   // 默认TTL
+	Namespace          string          // 命名空间
+	EnableMetrics      bool            // 是否启用指标统计
+	Logger             logger.ILogger  // 日志记录器（可选，不设置则使用 NoOpLogger）
+}
+
+// CacheMetrics 缓存指标
+type CacheMetrics struct {
+	Hits           int64 `json:"hits"`
+	Misses         int64 `json:"misses"`
+	Sets           int64 `json:"sets"`
+	Deletes        int64 `json:"deletes"`
+	Compressions   int64 `json:"compressions"`
+	Decompressions int64 `json:"decompressions"`
+	TotalSize      int64 `json:"total_size"`
+}
+
+// AdvancedCache 高级缓存包装器
+type AdvancedCache[T any] struct {
+	client  redis.UniversalClient
+	config  AdvancedCacheConfig
+	metrics *CacheMetrics
+	queue   *QueueHandler
+	hotkey  *HotKeyManager
+	lockMgr *LockManager
+	logger  logger.ILogger
+}
+
+// NewAdvancedCache 创建高级缓存
+func NewAdvancedCache[T any](client redis.UniversalClient, config AdvancedCacheConfig) *AdvancedCache[T] {
+	config.MinSizeForCompress = mathx.IfNotZero(config.MinSizeForCompress, 1024) // 1KB
+	config.DefaultTTL = mathx.IfNotZero(config.DefaultTTL, time.Hour)
+	config.Namespace = mathx.IfNotEmpty(config.Namespace, "cache")
+	config.Logger = mathx.IfEmpty(config.Logger, NewDefaultCachexLogger())
+
+	cache := &AdvancedCache[T]{
+		client:  client,
+		config:  config,
+		metrics: &CacheMetrics{},
+		logger:  config.Logger,
+	}
+
+	// 初始化队列
+	queueConfig := QueueConfig{
+		MaxRetries:      3,
+		RetryDelay:      time.Second * 5,
+		BatchSize:       10,
+		LockTimeout:     time.Minute * 5,
+		CleanupInterval: time.Minute * 10,
+	}
+	cache.queue = NewQueueHandler(client, config.Namespace, queueConfig)
+
+	// 初始化热key管理器
+	cache.hotkey = NewHotKeyManager(client,
+		WithHotKeyTTL(time.Hour),
+		WithHotKeyRefreshInterval(time.Minute*10),
+		WithHotKeyAutoRefresh(true),
+		WithHotKeyNamespace(config.Namespace),
+	)
+
+	// 初始化锁管理器
+	cache.lockMgr = NewLockManager(client,
+		WithLockTTL(time.Minute*5),
+		WithLockRetryInterval(time.Millisecond*100),
+		WithLockMaxRetries(10),
+		WithLockNamespace(config.Namespace),
+		WithLockWatchdog(true),
+		WithLockWatchdogInterval(time.Minute),
+	)
+
+	return cache
+}
+
+// getKey 获取完整的键名（用 string + 替代 fmt.Sprintf，零分配）
+func (c *AdvancedCache[T]) getKey(key string) string {
+	return c.config.Namespace + ":" + key
+}
+
+// compress 压缩数据
+func (c *AdvancedCache[T]) compress(data []byte) ([]byte, error) {
+	if c.config.Compression == CompressionNone || len(data) < c.config.MinSizeForCompress {
+		return data, nil
+	}
+
+	// bytes.Buffer + Bytes() 零拷贝取出；原实现用 strings.Builder 再 []byte(buf.String())，
+	// Builder→string→[]byte 是两次全量拷贝。
+	// gzip.Writer 从池中取（Reset 复用），避免每次调用新建约 300KB 的 deflate 状态。
+	var buf bytes.Buffer
+	writer := gzipWriterPool.Get().(*gzip.Writer)
+	writer.Reset(&buf)
+	defer gzipWriterPool.Put(writer)
+
+	if _, err := writer.Write(data); err != nil {
+		writer.Close()
+		c.logger.Errorf("failed to write compressed data: %v", err)
+		return nil, err
+	}
+
+	if err := writer.Close(); err != nil {
+		c.logger.Errorf("failed to close gzip writer: %v", err)
+		return nil, err
+	}
+
+	if c.config.EnableMetrics {
+		atomic.AddInt64(&c.metrics.Compressions, 1)
+	}
+
+	// 必须拷贝：buf 是栈上局部变量，Bytes() 返回其内部切片，
+	// 返回后 buf 可被复用/回收，直接外传会导致数据被覆写
+	out := make([]byte, buf.Len())
+	copy(out, buf.Bytes())
+	return out, nil
+}
+
+// gzipWriterPool 复用 gzip.Writer，规避每次压缩新建 deflate 状态的开销
+var gzipWriterPool = sync.Pool{
+	New: func() any {
+		return gzip.NewWriter(io.Discard)
+	},
+}
+
+// decompress 解压缩数据
+func (c *AdvancedCache[T]) decompress(data []byte) ([]byte, error) {
+	if c.config.Compression == CompressionNone {
+		return data, nil
+	}
+
+	// bytes.NewReader 零拷贝包装；原实现 strings.NewReader(string(data)) 会整份拷贝 data
+	reader, err := gzip.NewReader(bytes.NewReader(data))
+	if err != nil {
+		// 可能是未压缩的数据
+		return data, nil
+	}
+	defer reader.Close()
+
+	result, err := io.ReadAll(reader)
+	if err != nil {
+		// 如果解压缩失败，返回原始数据
+		return data, nil
+	}
+
+	if c.config.EnableMetrics {
+		atomic.AddInt64(&c.metrics.Decompressions, 1)
+	}
+
+	return result, nil
+}
+
+// Set 设置缓存
+func (c *AdvancedCache[T]) Set(ctx context.Context, key string, value T, ttl ...time.Duration) error {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return fmt.Errorf("failed to marshal value: %w", err)
+	}
+
+	// 压缩数据
+	compressedData, err := c.compress(data)
+	if err != nil {
+		return fmt.Errorf("failed to compress data: %w", err)
+	}
+
+	// 设置TTL
+	cacheTTL := c.config.DefaultTTL
+	if len(ttl) > 0 {
+		cacheTTL = ttl[0]
+	}
+
+	fullKey := c.getKey(key)
+	err = c.client.SetEx(ctx, fullKey, compressedData, cacheTTL).Err()
+	if err != nil {
+		c.logger.Errorf("failed to set cache for key %s: %v", key, err)
+		return err
+	}
+
+	if c.config.EnableMetrics {
+		atomic.AddInt64(&c.metrics.Sets, 1)
+		atomic.AddInt64(&c.metrics.TotalSize, int64(len(compressedData)))
+	}
+
+	return nil
+}
+
+// Get 获取缓存
+func (c *AdvancedCache[T]) Get(ctx context.Context, key string) (T, bool, error) {
+	var zero T
+
+	fullKey := c.getKey(key)
+	data, err := c.client.Get(ctx, fullKey).Bytes()
+	if err != nil {
+		if err == redis.Nil {
+			if c.config.EnableMetrics {
+				atomic.AddInt64(&c.metrics.Misses, 1)
+			}
+			return zero, false, nil
+		}
+		c.logger.Errorf("failed to get cache for key %s: %v", key, err)
+		return zero, false, err
+	}
+
+	// 解压缩数据
+	decompressedData, err := c.decompress(data)
+	if err != nil {
+		return zero, false, fmt.Errorf("failed to decompress data: %w", err)
+	}
+
+	var value T
+	if err := json.Unmarshal(decompressedData, &value); err != nil {
+		return zero, false, fmt.Errorf("failed to unmarshal value: %w", err)
+	}
+
+	if c.config.EnableMetrics {
+		atomic.AddInt64(&c.metrics.Hits, 1)
+	}
+
+	return value, true, nil
+}
+
+// GetOrSet 获取或设置缓存（如果不存在则设置）
+func (c *AdvancedCache[T]) GetOrSet(ctx context.Context, key string, fn func() (T, error), ttl ...time.Duration) (T, error) {
+	// 先尝试获取
+	if value, exists, err := c.Get(ctx, key); err == nil && exists {
+		return value, nil
+	}
+
+	// 使用分布式锁防止缓存击穿
+	lockKey := "getorset:" + key
+	lock := c.lockMgr.GetLock(lockKey)
+
+	if err := lock.Lock(ctx); err != nil {
+		// 如果获取锁失败，直接执行函数
+		c.logger.Warnf("failed to acquire lock for key %s, executing function directly: %v", key, err)
+		return fn()
+	}
+	defer lock.Unlock(ctx)
+
+	// 再次检查缓存（可能在等待锁的过程中其他协程已设置）
+	if value, exists, err := c.Get(ctx, key); err == nil && exists {
+		return value, nil
+	}
+
+	// 执行函数获取值
+	value, err := fn()
+	if err != nil {
+		return value, err
+	}
+
+	// 设置缓存
+	if setErr := c.Set(ctx, key, value, ttl...); setErr != nil {
+		// 记录错误但不影响返回结果
+		c.logger.Warnf("failed to set cache: %v", setErr)
+	}
+
+	return value, nil
+}
+
+// Delete 删除缓存
+func (c *AdvancedCache[T]) Delete(ctx context.Context, keys ...string) error {
+	if len(keys) == 0 {
+		return nil
+	}
+
+	fullKeys := make([]string, len(keys))
+	for i, key := range keys {
+		fullKeys[i] = c.getKey(key)
+	}
+
+	err := c.client.Del(ctx, fullKeys...).Err()
+	if err != nil {
+		c.logger.Errorf("failed to delete %d keys: %v", len(keys), err)
+		return err
+	}
+
+	if c.config.EnableMetrics {
+		atomic.AddInt64(&c.metrics.Deletes, int64(len(keys)))
+	}
+
+	return nil
+}
+
+// Exists 检查键是否存在
+func (c *AdvancedCache[T]) Exists(ctx context.Context, keys ...string) (int64, error) {
+	if len(keys) == 0 {
+		return 0, nil
+	}
+
+	fullKeys := make([]string, len(keys))
+	for i, key := range keys {
+		fullKeys[i] = c.getKey(key)
+	}
+
+	return c.client.Exists(ctx, fullKeys...).Result()
+}
+
+// TTL 获取键的TTL
+func (c *AdvancedCache[T]) TTL(ctx context.Context, key string) (time.Duration, error) {
+	fullKey := c.getKey(key)
+	return c.client.TTL(ctx, fullKey).Result()
+}
+
+// Expire 设置键的过期时间
+func (c *AdvancedCache[T]) Expire(ctx context.Context, key string, ttl time.Duration) error {
+	fullKey := c.getKey(key)
+	return c.client.Expire(ctx, fullKey, ttl).Err()
+}
+
+// Keys 获取匹配模式的所有键
+func (c *AdvancedCache[T]) Keys(ctx context.Context, pattern string) ([]string, error) {
+	fullPattern := c.getKey(pattern)
+	keys, err := c.client.Keys(ctx, fullPattern).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	// 移除命名空间前缀
+	prefix := c.config.Namespace + ":"
+	result := make([]string, len(keys))
+	for i, key := range keys {
+		result[i] = strings.TrimPrefix(key, prefix)
+	}
+
+	return result, nil
+}
+
+// Clear 清空指定模式的所有缓存
+func (c *AdvancedCache[T]) Clear(ctx context.Context, pattern string) error {
+	keys, err := c.Keys(ctx, pattern)
+	if err != nil {
+		return err
+	}
+
+	if len(keys) == 0 {
+		return nil
+	}
+
+	return c.Delete(ctx, keys...)
+}
+
+// GetQueue 获取队列处理器
+func (c *AdvancedCache[T]) GetQueue() *QueueHandler {
+	return c.queue
+}
+
+// GetHotKeyManager 获取热key管理器
+func (c *AdvancedCache[T]) GetHotKeyManager() *HotKeyManager {
+	return c.hotkey
+}
+
+// GetLockManager 获取锁管理器
+func (c *AdvancedCache[T]) GetLockManager() *LockManager {
+	return c.lockMgr
+}
+
+// GetMetrics 获取缓存指标（返回原子快照，避免数据竞争）
+func (c *AdvancedCache[T]) GetMetrics() *CacheMetrics {
+	if !c.config.EnableMetrics {
+		return nil
+	}
+	return &CacheMetrics{
+		Hits:           atomic.LoadInt64(&c.metrics.Hits),
+		Misses:         atomic.LoadInt64(&c.metrics.Misses),
+		Sets:           atomic.LoadInt64(&c.metrics.Sets),
+		Deletes:        atomic.LoadInt64(&c.metrics.Deletes),
+		Compressions:   atomic.LoadInt64(&c.metrics.Compressions),
+		Decompressions: atomic.LoadInt64(&c.metrics.Decompressions),
+		TotalSize:      atomic.LoadInt64(&c.metrics.TotalSize),
+	}
+}
+
+// ResetMetrics 重置缓存指标（原子写入，避免替换指针导致数据竞争）
+func (c *AdvancedCache[T]) ResetMetrics() {
+	if c.config.EnableMetrics {
+		atomic.StoreInt64(&c.metrics.Hits, 0)
+		atomic.StoreInt64(&c.metrics.Misses, 0)
+		atomic.StoreInt64(&c.metrics.Sets, 0)
+		atomic.StoreInt64(&c.metrics.Deletes, 0)
+		atomic.StoreInt64(&c.metrics.Compressions, 0)
+		atomic.StoreInt64(&c.metrics.Decompressions, 0)
+		atomic.StoreInt64(&c.metrics.TotalSize, 0)
+	}
+}
+
+// Ping 测试连接
+func (c *AdvancedCache[T]) Ping(ctx context.Context) error {
+	return c.client.Ping(ctx).Err()
+}
+
+// Close 关闭缓存
+func (c *AdvancedCache[T]) Close() error {
+	// 停止热key自动刷新
+	c.hotkey.StopAll()
+
+	// 释放所有锁
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	c.lockMgr.ReleaseAllLocks(ctx)
+
+	return c.client.Close()
+}
+
+// CacheWrapper 缓存包装器函数类型
+type CacheWrapperFunc[T any] func(ctx context.Context) (T, error)
+
+// Wrap 包装函数以添加缓存功能
+func (c *AdvancedCache[T]) Wrap(key string, fn CacheWrapperFunc[T], ttl ...time.Duration) CacheWrapperFunc[T] {
+	return func(ctx context.Context) (T, error) {
+		return c.GetOrSet(ctx, key, func() (T, error) { return fn(ctx) }, ttl...)
+	}
+}
+
+// BatchGet 批量获取
+func (c *AdvancedCache[T]) BatchGet(ctx context.Context, keys []string) (map[string]T, error) {
+	if len(keys) == 0 {
+		return make(map[string]T), nil
+	}
+
+	fullKeys := make([]string, len(keys))
+	for i, key := range keys {
+		fullKeys[i] = c.getKey(key)
+	}
+
+	// 使用Pipeline批量获取
+	pipe := c.client.Pipeline()
+	cmds := make([]*redis.StringCmd, len(fullKeys))
+
+	for i, fullKey := range fullKeys {
+		cmds[i] = pipe.Get(ctx, fullKey)
+	}
+
+	_, err := pipe.Exec(ctx)
+	if err != nil && err != redis.Nil {
+		c.logger.Errorf("failed to batch get %d keys: %v", len(keys), err)
+		return nil, err
+	}
+
+	c.logger.Debugf("batch getting %d keys", len(keys))
+	result := make(map[string]T)
+
+	for i, cmd := range cmds {
+		data, err := cmd.Bytes()
+		if err != nil {
+			if err == redis.Nil {
+				continue // 跳过不存在的键
+			}
+			return nil, err
+		}
+
+		// 解压缩和反序列化
+		decompressedData, err := c.decompress(data)
+		if err != nil {
+			continue
+		}
+
+		var value T
+		if err := json.Unmarshal(decompressedData, &value); err != nil {
+			continue
+		}
+
+		result[keys[i]] = value
+	}
+
+	return result, nil
+}
+
+// BatchSet 批量设置
+func (c *AdvancedCache[T]) BatchSet(ctx context.Context, items map[string]T, ttl ...time.Duration) error {
+	if len(items) == 0 {
+		return nil
+	}
+
+	cacheTTL := c.config.DefaultTTL
+	if len(ttl) > 0 {
+		cacheTTL = ttl[0]
+	}
+
+	pipe := c.client.Pipeline()
+
+	skippedCount := 0
+	for key, value := range items {
+		data, err := json.Marshal(value)
+		if err != nil {
+			c.logger.Warnf("failed to marshal value for key %s: %v", key, err)
+			skippedCount++
+			continue
+		}
+
+		compressedData, err := c.compress(data)
+		if err != nil {
+			c.logger.Warnf("failed to compress data for key %s: %v", key, err)
+			skippedCount++
+			continue
+		}
+
+		fullKey := c.getKey(key)
+		pipe.SetEx(ctx, fullKey, compressedData, cacheTTL)
+	}
+
+	c.logger.Debugf("batch setting %d keys (skipped %d)", len(items)-skippedCount, skippedCount)
+	_, err := pipe.Exec(ctx)
+	if err != nil {
+		c.logger.Errorf("failed to batch set %d keys: %v", len(items), err)
+	}
+	return err
+}

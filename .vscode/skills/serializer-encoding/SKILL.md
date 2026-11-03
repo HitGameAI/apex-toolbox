@@ -10,7 +10,7 @@ description: 序列化编码工具，提供多格式（JSON/Gob）与多压缩�
 ## 快速开始
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/serializer"
+import "github.com/HitGameAI/apex-toolbox/pkg/serializer"
 ```
 
 基本序列化：

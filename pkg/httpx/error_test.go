@@ -13,7 +13,7 @@ package httpx
 import (
 	"testing"
 
-	"github.com/kamalyes/go-toolbox/pkg/errorx"
+	"github.com/HitGameAI/apex-toolbox/pkg/errorx"
 	"github.com/stretchr/testify/require"
 )
 

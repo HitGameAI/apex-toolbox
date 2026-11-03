@@ -4,7 +4,7 @@
  * @LastEditors: kamalyes 501893067@qq.com
  * @LastEditTime: 2025-12-23 11:52:30
  * @FilePath: \go-toolbox\pkg\desensitize\strutil.go
- * @Description: 内部字符串工具 - 原先取自 go-toolbox/pkg/stringx 与 go-argus/validate
+ * @Description: 内部字符串工具 - 原先取自 go-toolbox/pkg/stringx 与 go-toolbox/pkg/argus/validate
  *
  * 本库只用到其中七个函数，逐条按上游语义内联，不为此拖进两个工具库
  * 每条语义都在 strutil_test.go 里闸住，包括上游遗留的字节/字符索引混用行为
@@ -24,7 +24,7 @@ import (
 )
 
 // isBlank 判断字符串是否为空或全空白
-// 对应 go-argus/validate.IsEmptyValue 作用在字符串上的分支：
+// 对应 go-toolbox/pkg/argus/validate.IsEmptyValue 作用在字符串上的分支：
 // 空串与仅含空格、制表、换行、回车的串都算空
 // 上游走 reflect.ValueOf(str) 包一层反射，这里直接扫字节，语义完全相同
 // [EN] Mirrors the string branch of the upstream empty check; upstream boxes the

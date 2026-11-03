@@ -1,0 +1,106 @@
+# Git attributes for go-sqlbuilder
+# https://git-scm.com/docs/gitattributes
+
+# =============================================================================
+# Auto detect text files and perform LF normalization
+# =============================================================================
+* text=auto eol=lf
+
+# =============================================================================
+# Go source files
+# =============================================================================
+*.go text eol=lf diff=golang
+
+# =============================================================================
+# Documentation
+# =============================================================================
+*.md text eol=lf diff=markdown
+*.txt text eol=lf
+LICENSE text eol=lf
+
+# =============================================================================
+# Configuration files
+# =============================================================================
+*.json text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.toml text eol=lf
+*.xml text eol=lf
+*.mod text eol=lf
+*.sum text eol=lf
+
+# =============================================================================
+# Shell scripts
+# =============================================================================
+*.sh text eol=lf
+*.bash text eol=lf
+
+# Windows scripts
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# =============================================================================
+# Binary files (don't diff)
+# =============================================================================
+*.exe binary
+*.dll binary
+*.so binary
+*.dylib binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.tar binary
+*.gz binary
+
+# =============================================================================
+# Export ignore (excluded from git archive / releases)
+# =============================================================================
+
+# Development directories
+.vscode/ export-ignore
+.idea/ export-ignore
+.devcontainer/ export-ignore
+
+# Test and coverage
+*_test.go export-ignore
+coverage/ export-ignore
+coverage export-ignore
+*.cover export-ignore
+*.coverprofile export-ignore
+
+# Examples and docs (optional - uncomment if not needed in release)
+# examples/ export-ignore
+# docs/ export-ignore
+
+# CI/CD and scripts
+.github/ export-ignore
+ci/ export-ignore
+scripts/ export-ignore
+benchmarks/ export-ignore
+
+# Git and editor files
+.gitignore export-ignore
+.gitattributes export-ignore
+.editorconfig export-ignore
+*.swp export-ignore
+*.swo export-ignore
+*~ export-ignore
+
+# Build artifacts
+*.test export-ignore
+*.prof export-ignore
+*.out export-ignore
+*.log export-ignore
+*.tmp export-ignore
+
+# =============================================================================
+# Linguist overrides (GitHub language statistics)
+# =============================================================================
+docs/** linguist-documentation
+examples/** linguist-documentation
+*_test.go linguist-tests

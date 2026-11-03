@@ -10,7 +10,7 @@
  */
 package httpx
 
-import "github.com/kamalyes/go-toolbox/pkg/errorx"
+import "github.com/HitGameAI/apex-toolbox/pkg/errorx"
 
 const (
 	ErrUnsupportedContentType  errorx.ErrorType = 30000 + iota // 不支持的内容类型

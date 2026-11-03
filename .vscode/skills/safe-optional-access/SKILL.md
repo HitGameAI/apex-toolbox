@@ -10,7 +10,7 @@ description: 安全访问与空值处理工具，提供可选链式字段访问�
 ## 快速开始
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/safe"
+import "github.com/HitGameAI/apex-toolbox/pkg/safe"
 ```
 
 链式安全访问：

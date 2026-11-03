@@ -14,7 +14,7 @@ package cron
 import (
 	"time"
 
-	"github.com/kamalyes/go-toolbox/pkg/types"
+	"github.com/HitGameAI/apex-toolbox/pkg/types"
 )
 
 // CronParseOption 解析选项配置

@@ -10,7 +10,7 @@ description: 上下文管理工具，提供可取消/超时/值的上下文创�
 ## 快速开始
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/contextx"
+import "github.com/HitGameAI/apex-toolbox/pkg/contextx"
 ```
 
 创建上下文：

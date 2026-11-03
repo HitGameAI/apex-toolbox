@@ -14,13 +14,13 @@
 ## 安装
 
 ```bash
-go get github.com/kamalyes/go-toolbox
+go get github.com/HitGameAI/apex-toolbox
 ```
 
 ## 快速开始
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/mathx"
+import "github.com/HitGameAI/apex-toolbox/pkg/mathx"
 
 // 基础三元运算
 result := mathx.IF(score >= 60, "及格", "不及格")

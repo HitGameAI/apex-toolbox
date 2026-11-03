@@ -11,7 +11,7 @@
 
 // Package protox 收口 go-toolbox 中真正需要 google.golang.org/protobuf 的反射辅助
 // 分出来的目的：pkg/types 被 mathx / convert / syncx 等大量基础包依赖，一旦它引入
-// protobuf，所有使用者（go-cachex、go-i18n 等）都会被动承担 30+ 个 protobuf 包
+// protobuf，所有使用者（go-cachex、go-toolbox/pkg/i18n 等）都会被动承担 30+ 个 protobuf 包
 //
 // [EN] Package protox holds the reflect helpers that genuinely need protobuf.
 // pkg/types is imported by many foundational packages, so keeping protobuf out of it

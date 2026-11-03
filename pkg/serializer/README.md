@@ -25,7 +25,7 @@
 ### 安装
 
 ```bash
-go get github.com/kamalyes/go-toolbox/pkg/serializer
+go get github.com/HitGameAI/apex-toolbox/pkg/serializer
 ```
 
 ### 基础使用
@@ -35,7 +35,7 @@ package main
 
 import (
     "fmt"
-    "github.com/kamalyes/go-toolbox/pkg/serializer"
+    "github.com/HitGameAI/apex-toolbox/pkg/serializer"
 )
 
 type User struct {
@@ -340,7 +340,7 @@ func ProtoJSONMarshal(m interface{}) (string, error)
 **示例：**
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/serializer"
+import "github.com/HitGameAI/apex-toolbox/pkg/serializer"
 
 // 序列化 protobuf 消息
 msg := wrapperspb.String("hello")
@@ -381,7 +381,7 @@ func ProtoJSONUnmarshal(a, b interface{}) error
 **示例：**
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/serializer"
+import "github.com/HitGameAI/apex-toolbox/pkg/serializer"
 
 // 反序列化 JSON 字符串（参数顺序任意）
 var msg wrapperspb.StringValue
@@ -438,7 +438,7 @@ func LenientProtoJSONUnmarshal(data []byte, msg proto.Message) error
 **示例：**
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/serializer"
+import "github.com/HitGameAI/apex-toolbox/pkg/serializer"
 
 var msg wrapperspb.Int64Value
 // 前端将 int64 以字符串形式传递："123" 而非 123
@@ -491,7 +491,7 @@ import (
     "fmt"
     "log"
 
-    "github.com/kamalyes/go-toolbox/pkg/serializer"
+    "github.com/HitGameAI/apex-toolbox/pkg/serializer"
     "google.golang.org/protobuf/types/known/wrapperspb"
 )
 

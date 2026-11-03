@@ -13,8 +13,8 @@ package cron
 import (
 	"testing"
 
-	"github.com/kamalyes/go-toolbox/pkg/mathx"
-	"github.com/kamalyes/go-toolbox/pkg/types"
+	"github.com/HitGameAI/apex-toolbox/pkg/mathx"
+	"github.com/HitGameAI/apex-toolbox/pkg/types"
 )
 
 // 测试边界

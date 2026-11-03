@@ -23,8 +23,8 @@ import (
 
 	"encoding/json"
 
-	"github.com/kamalyes/go-toolbox/pkg/convert"
-	"github.com/kamalyes/go-toolbox/pkg/types"
+	"github.com/HitGameAI/apex-toolbox/pkg/convert"
+	"github.com/HitGameAI/apex-toolbox/pkg/types"
 )
 
 // NewRand goroutine-safe rand.Rand, optional seed value

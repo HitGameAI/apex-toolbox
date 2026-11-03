@@ -1,0 +1,18 @@
+# Git attributes for go-logger
+
+# Export ignore patterns for git archive (used when creating tags/releases)
+examples/ export-ignore
+examples/** export-ignore
+
+# Documentation files
+*.md export-ignore
+LICENSE export-ignore
+
+# Development files
+.vscode/ export-ignore
+.gitignore export-ignore
+.gitattributes export-ignore
+
+# Test files
+*_test.go export-ignore
+coverage/ export-ignore

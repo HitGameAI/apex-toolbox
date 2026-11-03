@@ -17,9 +17,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kamalyes/go-toolbox/pkg/random"
+	"github.com/HitGameAI/apex-toolbox/pkg/random"
 
-	"github.com/kamalyes/go-toolbox/pkg/osx"
+	"github.com/HitGameAI/apex-toolbox/pkg/osx"
 )
 
 var errBench = errors.New("bench")

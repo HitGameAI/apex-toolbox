@@ -14,10 +14,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/kamalyes/go-toolbox/pkg/convert"
-	"github.com/kamalyes/go-toolbox/pkg/errorx"
-	"github.com/kamalyes/go-toolbox/pkg/mathx"
-	"github.com/kamalyes/go-toolbox/pkg/types"
+	"github.com/HitGameAI/apex-toolbox/pkg/convert"
+	"github.com/HitGameAI/apex-toolbox/pkg/errorx"
+	"github.com/HitGameAI/apex-toolbox/pkg/mathx"
+	"github.com/HitGameAI/apex-toolbox/pkg/types"
 )
 
 // 基础周期表达式(6字段：秒 分 时 日 月 周)

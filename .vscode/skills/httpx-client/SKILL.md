@@ -10,7 +10,7 @@ description: HTTP客户端工具，提供可配置的HTTP客户端、请求构�
 ## 快速开始
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/httpx"
+import "github.com/HitGameAI/apex-toolbox/pkg/httpx"
 ```
 
 创建客户端并构建请求：

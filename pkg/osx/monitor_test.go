@@ -17,8 +17,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kamalyes/go-toolbox/pkg/osx"
-	"github.com/kamalyes/go-toolbox/pkg/units"
+	"github.com/HitGameAI/apex-toolbox/pkg/osx"
+	"github.com/HitGameAI/apex-toolbox/pkg/units"
 )
 
 // TestMonitorBasicMonitor 基础监控示例

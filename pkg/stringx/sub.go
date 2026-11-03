@@ -13,7 +13,7 @@ package stringx
 import (
 	"strings"
 
-	"github.com/kamalyes/go-argus"
+	validator "github.com/HitGameAI/apex-toolbox/pkg/argus"
 )
 
 // SubBefore 截取分隔字符串之前的字符串，不包括分隔字符串

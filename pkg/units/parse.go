@@ -16,7 +16,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/kamalyes/go-toolbox/pkg/mathx"
+	"github.com/HitGameAI/apex-toolbox/pkg/mathx"
 )
 
 const errFmtWrappedWithString = "%w: '%s'"

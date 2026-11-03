@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kamalyes/go-toolbox/pkg/mathx"
+	"github.com/HitGameAI/apex-toolbox/pkg/mathx"
 )
 
 // temporalHasherConfig 临时哈希生成器配置（私有）

@@ -36,7 +36,7 @@ body:
       value: |
         package main
 
-        import "github.com/kamalyes/go-toolbox"
+        import "github.com/HitGameAI/apex-toolbox"
 
         func main() {
           // Steps to reproduce
@@ -47,7 +47,7 @@ body:
       label: "Checklist:"
       description: "By submitting this issue, you confirm that:"
       options:
-        - label: "I agree to follow Fiber's [Code of Conduct](https://github.com/kamalyes/go-toolbox/blob/master/.github/CODE_OF_CONDUCT.md)."
+        - label: "I agree to follow Fiber's [Code of Conduct](https://github.com/HitGameAI/apex-toolbox/blob/master/.github/CODE_OF_CONDUCT.md)."
           required: true
         - label: "I have checked for existing issues that describe my suggestion prior to opening this one."
           required: true

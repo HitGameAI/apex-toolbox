@@ -18,7 +18,7 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/kamalyes/go-toolbox/pkg/mathx"
+	"github.com/HitGameAI/apex-toolbox/pkg/mathx"
 )
 
 // 定义常用的数学常数

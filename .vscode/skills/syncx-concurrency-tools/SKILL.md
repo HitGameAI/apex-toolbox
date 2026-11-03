@@ -10,7 +10,7 @@ description: 并发编程工具包，提供互斥锁封装、协程安全启动�
 ## 快速开始
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/syncx"
+import "github.com/HitGameAI/apex-toolbox/pkg/syncx"
 ```
 
 加锁执行代码块：

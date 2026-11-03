@@ -19,8 +19,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kamalyes/go-toolbox/pkg/mathx"
-	"github.com/kamalyes/go-toolbox/pkg/zipx"
+	"github.com/HitGameAI/apex-toolbox/pkg/mathx"
+	"github.com/HitGameAI/apex-toolbox/pkg/zipx"
 )
 
 // SerializeType 序列化类型

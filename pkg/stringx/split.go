@@ -13,7 +13,7 @@ package stringx
 import (
 	"strings"
 
-	"github.com/kamalyes/go-argus"
+	validator "github.com/HitGameAI/apex-toolbox/pkg/argus"
 )
 
 // Split 分割字符串

@@ -14,7 +14,7 @@
 ## 安装
 
 ```bash
-go get github.com/kamalyes/go-toolbox/pkg/idgen
+go get github.com/HitGameAI/apex-toolbox/pkg/idgen
 ```
 
 ## 快速开始
@@ -24,7 +24,7 @@ package main
 
 import (
     "fmt"
-    "github.com/kamalyes/go-toolbox/pkg/idgen"
+    "github.com/HitGameAI/apex-toolbox/pkg/idgen"
 )
 
 func main() {

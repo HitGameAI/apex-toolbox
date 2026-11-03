@@ -23,8 +23,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kamalyes/go-toolbox/pkg/convert"
-	"github.com/kamalyes/go-toolbox/pkg/mathx"
+	"github.com/HitGameAI/apex-toolbox/pkg/convert"
+	"github.com/HitGameAI/apex-toolbox/pkg/mathx"
 )
 
 // TOTPConfig TOTP配置参数

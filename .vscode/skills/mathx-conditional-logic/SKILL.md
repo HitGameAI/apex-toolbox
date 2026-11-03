@@ -12,7 +12,7 @@ description: 数学工具与三元运算包，提供泛型条件表达式、空�
 ## 快速开始
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/mathx"
+import "github.com/HitGameAI/apex-toolbox/pkg/mathx"
 ```
 
 三元表达式：

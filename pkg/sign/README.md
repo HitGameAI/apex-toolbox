@@ -17,7 +17,7 @@
 ## 安装
 
 ```bash
-go get github.com/kamalyes/go-toolbox/pkg/sign
+go get github.com/HitGameAI/apex-toolbox/pkg/sign
 ```
 
 ## 快速开始
@@ -27,7 +27,7 @@ package main
 
 import (
     "fmt"
-    "github.com/kamalyes/go-toolbox/pkg/sign"
+    "github.com/HitGameAI/apex-toolbox/pkg/sign"
 )
 
 func main() {

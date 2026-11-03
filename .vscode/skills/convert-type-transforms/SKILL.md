@@ -12,7 +12,7 @@ description: 类型转换工具包，提供泛型强制转换、JSON/YAML互转�
 ## 快速开始
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/convert"
+import "github.com/HitGameAI/apex-toolbox/pkg/convert"
 ```
 
 泛型类型转换：

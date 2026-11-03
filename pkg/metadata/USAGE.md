@@ -10,7 +10,7 @@ HTTP 请求元数据提取器，用于提取和管理 HTTP 请求的完整元数
 import (
     "fmt"
     "net/http"
-    "github.com/kamalyes/go-toolbox/pkg/metadata"
+    "github.com/HitGameAI/apex-toolbox/pkg/metadata"
 )
 
 func handler(w http.ResponseWriter, r *http.Request) {

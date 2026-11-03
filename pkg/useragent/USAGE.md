@@ -7,7 +7,7 @@ User-Agent 解析器和生成器，支持浏览器识别、设备检测、爬虫
 ### 基础用法
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/useragent"
+import "github.com/HitGameAI/apex-toolbox/pkg/useragent"
 
 // 解析 User-Agent
 ua := useragent.Parse("Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0")

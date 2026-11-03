@@ -17,7 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/kamalyes/go-toolbox/pkg/syncx"
+	"github.com/HitGameAI/apex-toolbox/pkg/syncx"
 )
 
 // ThresholdLevel 阈值级别

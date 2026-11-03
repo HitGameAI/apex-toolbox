@@ -10,7 +10,7 @@ description: 网络工具包，提供本地IP获取、公网IP获取、客户端
 ## 快速开始
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/netx"
+import "github.com/HitGameAI/apex-toolbox/pkg/netx"
 ```
 
 获取IP：

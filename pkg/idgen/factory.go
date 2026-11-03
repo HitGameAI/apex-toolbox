@@ -12,7 +12,7 @@
 package idgen
 
 import (
-	"github.com/kamalyes/go-toolbox/pkg/osx"
+	"github.com/HitGameAI/apex-toolbox/pkg/osx"
 )
 
 // NewIDGenerator 创建 ID 生成器

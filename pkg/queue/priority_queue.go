@@ -16,7 +16,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/kamalyes/go-toolbox/pkg/syncx"
+	"github.com/HitGameAI/apex-toolbox/pkg/syncx"
 )
 
 // Item 定义了优先队列中的元素

@@ -10,7 +10,7 @@ description: 数据脱敏与掩码工具，提供多种内置脱敏类型（自�
 ## 快速开始
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/desensitize"
+import "github.com/HitGameAI/apex-toolbox/pkg/desensitize"
 ```
 
 按类型脱敏：

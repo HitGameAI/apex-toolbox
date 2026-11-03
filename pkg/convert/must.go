@@ -19,8 +19,8 @@ import (
 	"strings"
 	"time"
 
-	validator "github.com/kamalyes/go-argus"
-	"github.com/kamalyes/go-toolbox/pkg/types"
+	validator "github.com/HitGameAI/apex-toolbox/pkg/argus"
+	"github.com/HitGameAI/apex-toolbox/pkg/types"
 )
 
 // MustString 强制转为字符串

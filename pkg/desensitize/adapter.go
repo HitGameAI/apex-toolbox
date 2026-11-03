@@ -279,7 +279,7 @@ func OperateByRule(desensitizerType string, in interface{}) (interface{}, error)
 
 // TagName 结构体字段上声明脱敏规则所用的 tag 名
 //
-// 对外导出是为了让下游不必硬编码这个字面量：go-pbmo 这类库要在自己的字段
+// 对外导出是为了让下游不必硬编码这个字面量：go-toolbox/pkg/pbmo 这类库要在自己的字段
 // 计划里读同一个 tag，若各自写死字符串，这里改名下游不会报错、只会静默不再
 // 命中——脱敏静默失效正是最危险的失败方式
 // 本包内部读 tag 也走这个常量，保证只有一处来源

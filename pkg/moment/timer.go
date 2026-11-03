@@ -15,8 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kamalyes/go-toolbox/pkg/osx"
-	"github.com/kamalyes/go-toolbox/pkg/syncx"
+	"github.com/HitGameAI/apex-toolbox/pkg/osx"
+	"github.com/HitGameAI/apex-toolbox/pkg/syncx"
 )
 
 // TimerInterface 定义计时器的接口

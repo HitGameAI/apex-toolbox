@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kamalyes/go-toolbox/pkg/stringx"
+	"github.com/HitGameAI/apex-toolbox/pkg/stringx"
 )
 
 var (

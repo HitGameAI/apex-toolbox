@@ -52,10 +52,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kamalyes/go-toolbox/pkg/mathx"
-	"github.com/kamalyes/go-toolbox/pkg/osx"
-	"github.com/kamalyes/go-toolbox/pkg/random"
-	"github.com/kamalyes/go-toolbox/pkg/syncx"
+	"github.com/HitGameAI/apex-toolbox/pkg/mathx"
+	"github.com/HitGameAI/apex-toolbox/pkg/osx"
+	"github.com/HitGameAI/apex-toolbox/pkg/random"
+	"github.com/HitGameAI/apex-toolbox/pkg/syncx"
 )
 
 // Retry 结构体用于实现重试机制

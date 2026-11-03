@@ -17,7 +17,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/kamalyes/go-toolbox/pkg/convert"
+	"github.com/HitGameAI/apex-toolbox/pkg/convert"
 )
 
 // SameSubStr 创建多少个相同 子字符串的字符串

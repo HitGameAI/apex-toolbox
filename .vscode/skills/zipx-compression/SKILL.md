@@ -10,7 +10,7 @@ description: 压缩解压工具，提供Gzip/Zlib的压缩解压、多级压缩�
 ## 快速开始
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/zipx"
+import "github.com/HitGameAI/apex-toolbox/pkg/zipx"
 ```
 
 Gzip 压缩解压：

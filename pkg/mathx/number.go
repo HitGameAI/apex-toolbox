@@ -17,8 +17,8 @@ import (
 	"math"
 	"strconv"
 
-	"github.com/kamalyes/go-toolbox/pkg/stringx"
-	"github.com/kamalyes/go-toolbox/pkg/types"
+	"github.com/HitGameAI/apex-toolbox/pkg/stringx"
+	"github.com/HitGameAI/apex-toolbox/pkg/types"
 )
 
 // Decimals 转换为包含小数点后指定位数的字符串

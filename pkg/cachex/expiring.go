@@ -1,0 +1,401 @@
+/*
+ * @Author: kamalyes 501893067@qq.com
+ * @Date: 2025-11-06 21:15:15
+ * @LastEditors: kamalyes 501893067@qq.com
+ * @LastEditTime: 2026-10-26 10:19:57
+ * @FilePath: \go-toolbox\cachex\\expiring.go
+ * @Description:
+ *
+ * Copyright (c) 2025 by kamalyes, All Rights Reserved.
+ */
+package cachex
+
+import (
+	"context"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/HitGameAI/apex-toolbox/pkg/mathx"
+	"github.com/HitGameAI/apex-toolbox/pkg/syncx"
+)
+
+// ExpiringHandler 是一个简单的基于 map 的线程安全内存缓存，支持 TTL 和后台清理
+// 它实现了 Handler 接口
+type ExpiringHandler struct {
+	mu     sync.RWMutex
+	items  map[string]expItem
+	ticker *time.Ticker
+	stop   chan struct{}
+	// closed 用原子标志，理由同 lru.go：校验函数的实参在取锁前求值，
+	// 四个入口（SetWithTTLAndCtx / GetWithCtx / GetTTLWithCtx / DelWithCtx）都在锁外读它
+	// 实测 -race 下稳定复现：expiring.go:188 的读 对 expiring.go:388 的写
+	// [EN] An atomic flag for the same reason as in lru.go: the validation helper's argument
+	// is evaluated before the lock is taken, so four entry points read it unlocked
+	closed int32
+	wg     sync.WaitGroup
+}
+
+type expItem struct {
+	val    []byte
+	expiry time.Time // zero = no expiry
+}
+
+// NewExpiringHandler 创建一个新的 ExpiringHandler，cleanupInterval 控制后台清理频率（为0则使用1s）
+func NewExpiringHandler(cleanupInterval time.Duration) *ExpiringHandler {
+	cleanupInterval = mathx.IfLeZero(cleanupInterval, time.Second)
+	h := &ExpiringHandler{
+		items:  make(map[string]expItem),
+		ticker: time.NewTicker(cleanupInterval),
+		stop:   make(chan struct{}),
+	}
+	h.wg.Add(1)
+	syncx.Go().OnPanic(nil).Exec(h.cleanupLoop)
+	return h
+}
+
+// 增量清扫参数
+//
+// 原实现每个 tick 持**独占锁**遍历整张 map，锁持有时间与条目数成正比：
+// 实测 10 万条目约 569µs、50 万条目约 5.1ms，期间所有读者全部阻塞。
+// 均值吞吐完全掩盖该现象（10ms 周期下占空比仅 5.7%），但尾延迟被严重拉长。
+//
+// 改为 Redis 风格的取样清扫：每轮持锁只遍历固定条数，锁持有时间与**总条目数解耦**；
+// 若本轮过期密度高则继续下一轮，密度低即收工，并受总时间预算约束。
+// Go 的 map range 每次从随机桶起始，故逐轮取样天然覆盖不同区域。
+//
+// 正确性不依赖清扫及时性：读路径（GetWithCtx）已做惰性过期判定，
+// 清扫只负责回收「永不再被访问」的过期条目所占内存。
+const (
+	expSweepSampleSize    = 256                  // 每轮持锁最多遍历的条目数
+	expSweepMaxRounds     = 16                   // 单次 tick 的最大轮数
+	expSweepBudget        = 2 * time.Millisecond // 单次 tick 的总时间预算
+	expSweepContinueRatio = 4                    // 过期数 ×该值 ≥ 样本量 时继续下一轮
+)
+
+func (h *ExpiringHandler) cleanupLoop() {
+	defer h.wg.Done()
+	for {
+		select {
+		case <-h.ticker.C:
+			h.sweepIncremental()
+		case <-h.stop:
+			// stop requested, exit goroutine
+			return
+		}
+	}
+}
+
+// sweepIncremental 增量清扫：分多轮取样，每轮短暂持锁，整体受时间预算约束
+func (h *ExpiringHandler) sweepIncremental() {
+	deadline := time.Now().Add(expSweepBudget)
+	for round := 0; round < expSweepMaxRounds; round++ {
+		scanned, expired := h.sweepSample(expSweepSampleSize)
+		if scanned == 0 {
+			return // map 已空
+		}
+		// 过期密度低：无需继续，留给后续 tick 与惰性过期
+		if expired*expSweepContinueRatio < scanned {
+			return
+		}
+		if time.Now().After(deadline) {
+			return
+		}
+	}
+}
+
+// sweepSample 取样清扫一轮，持写锁但最多遍历 limit 个条目
+// 返回本轮实际遍历数与删除数
+func (h *ExpiringHandler) sweepSample(limit int) (scanned, expired int) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	now := time.Now()
+	for k, it := range h.items {
+		if scanned >= limit {
+			break
+		}
+		scanned++
+		if !it.expiry.IsZero() && now.After(it.expiry) {
+			delete(h.items, k)
+			expired++
+		}
+	}
+	return scanned, expired
+}
+
+func copyB(b []byte) []byte {
+	if b == nil {
+		return nil
+	}
+	nb := make([]byte, len(b))
+	copy(nb, b)
+	return nb
+}
+
+// ========== 简化版方法（不带context） ==========
+
+func (h *ExpiringHandler) Get(key []byte) ([]byte, error) {
+	return h.GetWithCtx(context.Background(), key)
+}
+
+func (h *ExpiringHandler) GetTTL(key []byte) (time.Duration, error) {
+	return h.GetTTLWithCtx(context.Background(), key)
+}
+
+func (h *ExpiringHandler) Set(key, value []byte) error {
+	return h.SetWithCtx(context.Background(), key, value)
+}
+
+func (h *ExpiringHandler) SetWithTTL(key, value []byte, ttl time.Duration) error {
+	return h.SetWithTTLAndCtx(context.Background(), key, value, ttl)
+}
+
+func (h *ExpiringHandler) Del(key []byte) error {
+	return h.DelWithCtx(context.Background(), key)
+}
+
+func (h *ExpiringHandler) BatchGet(keys [][]byte) ([][]byte, []error) {
+	return h.BatchGetWithCtx(context.Background(), keys)
+}
+
+// ========== 完整版方法（带context） ==========
+
+// SetWithCtx 将值写入缓存（无TTL，支持context）
+func (h *ExpiringHandler) SetWithCtx(ctx context.Context, key, value []byte) error {
+	return h.SetWithTTLAndCtx(ctx, key, value, -1) // -1 表示永不过期
+}
+
+// SetWithTTLAndCtx 写入值并设置TTL（ttl<=0 表示不过期，支持context）
+func (h *ExpiringHandler) SetWithTTLAndCtx(ctx context.Context, key, value []byte, ttl time.Duration) error {
+	if err := ValidateWriteWithTTLOp(key, value, ttl, true, atomic.LoadInt32(&h.closed) != 0); err != nil {
+		return err
+	}
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	sk := string(key)
+	it := expItem{val: copyB(value)}
+	if ttl > 0 {
+		it.expiry = time.Now().Add(ttl)
+	} else if ttl == 0 {
+		// 0 表示立即过期
+		it.expiry = time.Now().Add(-time.Second)
+	} else if ttl == -1 {
+		// -1 表示永不过期，保持 expiry 为零值
+		it.expiry = time.Time{}
+	}
+	h.items[sk] = it
+	return nil
+}
+
+// GetWithCtx 读取值，如果不存在或已过期返回ErrNotFound
+func (h *ExpiringHandler) GetWithCtx(ctx context.Context, key []byte) ([]byte, error) {
+	if err := ValidateBasicOp(key, true, atomic.LoadInt32(&h.closed) != 0); err != nil {
+		return nil, err
+	}
+
+	h.mu.RLock()
+	it, ok := h.items[string(key)]
+	h.mu.RUnlock()
+	if !ok {
+		return nil, ErrNotFound
+	}
+	if !it.expiry.IsZero() && time.Now().After(it.expiry) {
+		// lazy delete
+		h.mu.Lock()
+		// re-check and delete
+		if cur, ok2 := h.items[string(key)]; ok2 {
+			if !cur.expiry.IsZero() && time.Now().After(cur.expiry) {
+				delete(h.items, string(key))
+			}
+		}
+		h.mu.Unlock()
+		return nil, ErrNotFound
+	}
+	return copyB(it.val), nil
+}
+
+// GetTTLWithCtx 返回剩余TTL（0 表示无TTL），找不到返回ErrNotFound
+func (h *ExpiringHandler) GetTTLWithCtx(ctx context.Context, key []byte) (time.Duration, error) {
+	if err := ValidateBasicOp(key, true, atomic.LoadInt32(&h.closed) != 0); err != nil {
+		return 0, err
+	}
+
+	h.mu.RLock()
+	it, ok := h.items[string(key)]
+	h.mu.RUnlock()
+	if !ok {
+		return 0, ErrNotFound
+	}
+	if it.expiry.IsZero() {
+		return 0, nil
+	}
+	return time.Until(it.expiry), nil
+}
+
+// DelWithCtx 删除键
+func (h *ExpiringHandler) DelWithCtx(ctx context.Context, key []byte) error {
+	if err := ValidateBasicOp(key, true, atomic.LoadInt32(&h.closed) != 0); err != nil {
+		return err
+	}
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	delete(h.items, string(key))
+	return nil
+}
+
+// BatchGetWithCtx 批量获取多个键的值
+func (h *ExpiringHandler) BatchGetWithCtx(ctx context.Context, keys [][]byte) ([][]byte, []error) {
+	if len(keys) == 0 {
+		return nil, nil
+	}
+
+	results := make([][]byte, len(keys))
+	errors := make([]error, len(keys))
+
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	if atomic.LoadInt32(&h.closed) != 0 {
+		for i := range errors {
+			errors[i] = ErrClosed
+		}
+		return results, errors
+	}
+
+	now := time.Now()
+	for i, key := range keys {
+		if len(key) == 0 {
+			errors[i] = ErrInvalidKey
+			continue
+		}
+
+		sk := string(key)
+		if item, found := h.items[sk]; found {
+			if !item.expiry.IsZero() && now.After(item.expiry) {
+				// 已过期但还在map中，视为未找到
+				errors[i] = ErrNotFound
+			} else {
+				// 复制数据避免外部修改
+				valueCopy := make([]byte, len(item.val))
+				copy(valueCopy, item.val)
+				results[i] = valueCopy
+			}
+		} else {
+			errors[i] = ErrNotFound
+		}
+	}
+
+	return results, errors
+}
+
+// GetOrCompute 获取缓存值，如果不存在则计算并设置
+func (h *ExpiringHandler) GetOrCompute(key []byte, ttl time.Duration, loader func() ([]byte, error)) ([]byte, error) {
+	ctxLoader := func(context.Context) ([]byte, error) { return loader() }
+	return h.GetOrComputeWithCtx(context.Background(), key, ttl, ctxLoader)
+}
+
+// GetOrComputeWithCtx 获取缓存值，如果不存在则计算并设置
+func (h *ExpiringHandler) GetOrComputeWithCtx(ctx context.Context, key []byte, ttl time.Duration, loader func(context.Context) ([]byte, error)) ([]byte, error) {
+	if len(key) == 0 {
+		return nil, ErrInvalidKey
+	}
+
+	sk := string(key)
+
+	// 首先尝试获取
+	h.mu.RLock()
+	if atomic.LoadInt32(&h.closed) != 0 {
+		h.mu.RUnlock()
+		return nil, ErrClosed
+	}
+
+	if item, found := h.items[sk]; found {
+		now := time.Now()
+		if !item.expiry.IsZero() && now.After(item.expiry) {
+			// 过期，需要重新计算
+			h.mu.RUnlock()
+		} else {
+			// 复制数据避免外部修改
+			result := make([]byte, len(item.val))
+			copy(result, item.val)
+			h.mu.RUnlock()
+			return result, nil
+		}
+	} else {
+		h.mu.RUnlock()
+	}
+
+	// 检查context是否已取消
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
+	// 缓存未命中或已过期，调用loader
+	value, err := loader(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// 将结果写入缓存
+	if ttl <= 0 {
+		h.SetWithCtx(ctx, key, value)
+	} else {
+		h.SetWithTTLAndCtx(ctx, key, value, ttl)
+	}
+
+	// 返回值的拷贝
+	result := make([]byte, len(value))
+	copy(result, value)
+	return result, nil
+}
+
+// Stats 返回缓存统计信息
+func (h *ExpiringHandler) Stats() map[string]interface{} {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	if atomic.LoadInt32(&h.closed) != 0 {
+		return map[string]interface{}{
+			"closed":        true,
+			"entries":       0,
+			"expired_items": 0,
+		}
+	}
+
+	// 计算过期项
+	expiredCount := 0
+	now := time.Now()
+	for _, item := range h.items {
+		if !item.expiry.IsZero() && now.After(item.expiry) {
+			expiredCount++
+		}
+	}
+
+	return map[string]interface{}{
+		"entries":       len(h.items),
+		"expired_items": expiredCount,
+		"closed":        atomic.LoadInt32(&h.closed) != 0,
+		"cache_type":    "expiring",
+	}
+}
+
+// Close 停止后台清理并释放资源
+func (h *ExpiringHandler) Close() error {
+	h.mu.Lock()
+	if atomic.LoadInt32(&h.closed) != 0 {
+		h.mu.Unlock()
+		return nil
+	}
+	atomic.StoreInt32(&h.closed, 1)
+	// signal goroutine to stop and stop the ticker
+	close(h.stop)
+	h.ticker.Stop()
+	h.mu.Unlock()
+	h.wg.Wait()
+	return nil
+}

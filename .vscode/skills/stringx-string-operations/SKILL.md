@@ -10,7 +10,7 @@ description: 字符串操作链式工具，提供链式调用、子串提取、�
 ## 快速开始
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/stringx"
+import "github.com/HitGameAI/apex-toolbox/pkg/stringx"
 ```
 
 链式调用：

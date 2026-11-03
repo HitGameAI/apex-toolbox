@@ -10,7 +10,7 @@ description: User-Agent解析与生成工具，提供浏览器/OS/设备信息�
 ## 快速开始
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/useragent"
+import "github.com/HitGameAI/apex-toolbox/pkg/useragent"
 ```
 
 ### 解析 User-Agent

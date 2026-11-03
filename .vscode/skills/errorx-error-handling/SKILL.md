@@ -10,7 +10,7 @@ description: 错误处理体系，提供错误分类、错误类型注册、错�
 ## 快速开始
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/errorx"
+import "github.com/HitGameAI/apex-toolbox/pkg/errorx"
 ```
 
 创建结构化错误：

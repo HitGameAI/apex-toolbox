@@ -15,7 +15,7 @@
 ## 安装
 
 ```bash
-go get github.com/kamalyes/go-toolbox/pkg/cron
+go get github.com/HitGameAI/apex-toolbox/pkg/cron
 ```
 
 ## 快速开始
@@ -28,7 +28,7 @@ package main
 import (
     "fmt"
     "time"
-    "github.com/kamalyes/go-toolbox/pkg/cron"
+    "github.com/HitGameAI/apex-toolbox/pkg/cron"
 )
 
 func main() {
@@ -496,7 +496,7 @@ package main
 import (
     "fmt"
     "time"
-    "github.com/kamalyes/go-toolbox/pkg/cron"
+    "github.com/HitGameAI/apex-toolbox/pkg/cron"
 )
 
 func main() {

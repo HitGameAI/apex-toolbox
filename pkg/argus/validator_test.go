@@ -1,0 +1,2441 @@
+/*
+ * @Author: kamalyes 501893067@qq.com
+ * @Date: 2023-12-06 00:00:00
+ * @LastEditors: kamalyes 501893067@qq.com
+ * @LastEditTime: 2026-10-28 15:59:26
+ * @FilePath: \go-toolbox\pkg\argus\validator_test.go
+ * @Description: validator.go 测试，覆盖校验器核心逻辑、Struct/Var 校验和 evalRule 分支
+ *
+ * Copyright (c) 2023 by kamalyes, All Rights Reserved.
+ */
+package validator
+
+import (
+	"context"
+	"fmt"
+	"reflect"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/HitGameAI/apex-toolbox/pkg/argus/rule"
+	"github.com/HitGameAI/apex-toolbox/pkg/argus/utils"
+)
+
+type scheduleRequest struct {
+	Type      string    `json:"type" validate:"required,oneof=instant schedule"`
+	StartTime time.Time `json:"start_time" validate:"required_if=type schedule,after=now,beforefield=end_time"`
+	EndTime   time.Time `json:"end_time" validate:"required_with=start_time,afterfield=start_time"`
+}
+
+func TestStructTimeRangeRules(t *testing.T) {
+	v := New(WithRequiredStructEnabled())
+	now := time.Now()
+
+	req := scheduleRequest{
+		Type:      "schedule",
+		StartTime: now.Add(time.Hour),
+		EndTime:   now.Add(2 * time.Hour),
+	}
+	if err := v.Struct(req); err != nil {
+		t.Fatalf("expected valid request, got %v", err)
+	}
+}
+
+func TestStructTimeRangeRulesRejectPastStart(t *testing.T) {
+	v := New(WithRequiredStructEnabled())
+	now := time.Now()
+
+	req := scheduleRequest{
+		Type:      "schedule",
+		StartTime: now.Add(-time.Hour),
+		EndTime:   now.Add(2 * time.Hour),
+	}
+	err := v.Struct(req)
+	if err == nil {
+		t.Fatal("expected past start_time to fail")
+	}
+}
+
+func TestStructTimeRangeRulesRejectEndBeforeStart(t *testing.T) {
+	v := New(WithRequiredStructEnabled())
+	now := time.Now()
+
+	req := scheduleRequest{
+		Type:      "schedule",
+		StartTime: now.Add(2 * time.Hour),
+		EndTime:   now.Add(time.Hour),
+	}
+	err := v.Struct(req)
+	if err == nil {
+		t.Fatal("expected end_time before start_time to fail")
+	}
+}
+
+func TestRequiredIfUsesJSONFieldName(t *testing.T) {
+	v := New(WithRequiredStructEnabled())
+
+	req := scheduleRequest{Type: "schedule"}
+	err := v.Struct(req)
+	if err == nil {
+		t.Fatal("expected required_if=type schedule to require start_time")
+	}
+}
+
+func TestSetTagName(t *testing.T) {
+	v := New()
+	v.SetTagName("custom")
+	if v.tagName != "custom" {
+		t.Fatal("expected tag name to be custom")
+	}
+}
+
+func TestSetTagNameEmpty(t *testing.T) {
+	v := New()
+	original := v.tagName
+	v.SetTagName("  ")
+	if v.tagName != original {
+		t.Fatal("expected tag name to remain unchanged for blank input")
+	}
+}
+
+func TestRegisterTagNameFunc(t *testing.T) {
+	v := New()
+	v.RegisterTagNameFunc(func(sf reflect.StructField) string {
+		return "custom_" + sf.Name
+	})
+	if v.tagNameFunc == nil {
+		t.Fatal("expected tagNameFunc to be set")
+	}
+}
+
+// integerTestStruct 用于测试 validate:"integer" tag 规则
+type integerTestStruct struct {
+	IntField    int     `json:"int_field" validate:"integer"`
+	FloatField  float64 `json:"float_field" validate:"integer"`
+	StringField string  `json:"string_field" validate:"integer"`
+	UintField   uint    `json:"uint_field" validate:"integer"`
+}
+
+func TestRuleIntegerTag(t *testing.T) {
+	v := New(WithRequiredStructEnabled())
+
+	t.Run("全部有效整数", func(t *testing.T) {
+		req := integerTestStruct{
+			IntField:    42,
+			FloatField:  100.0,
+			StringField: "123",
+			UintField:   10,
+		}
+		if err := v.Struct(req); err != nil {
+			t.Fatalf("expected valid, got %v", err)
+		}
+	})
+
+	t.Run("float 非整数失败", func(t *testing.T) {
+		req := integerTestStruct{
+			IntField:    42,
+			FloatField:  3.14, // 非整数
+			StringField: "123",
+			UintField:   10,
+		}
+		err := v.Struct(req)
+		if err == nil {
+			t.Fatal("expected float 3.14 to fail integer rule")
+		}
+	})
+
+	t.Run("string 非整数失败", func(t *testing.T) {
+		req := integerTestStruct{
+			IntField:    42,
+			FloatField:  100.0,
+			StringField: "12.3", // 非整数
+			UintField:   10,
+		}
+		err := v.Struct(req)
+		if err == nil {
+			t.Fatal("expected string \"12.3\" to fail integer rule")
+		}
+	})
+
+	t.Run("string 含非数字失败", func(t *testing.T) {
+		req := integerTestStruct{
+			IntField:    42,
+			FloatField:  100.0,
+			StringField: "12abc", // 含非数字
+			UintField:   10,
+		}
+		err := v.Struct(req)
+		if err == nil {
+			t.Fatal("expected string \"12abc\" to fail integer rule")
+		}
+	})
+
+	t.Run("负数字符串有效", func(t *testing.T) {
+		req := integerTestStruct{
+			IntField:    42,
+			FloatField:  100.0,
+			StringField: "-123", // 负整数
+			UintField:   10,
+		}
+		if err := v.Struct(req); err != nil {
+			t.Fatalf("expected \"-123\" to pass integer rule, got %v", err)
+		}
+	})
+}
+
+func TestStructInvalidInput(t *testing.T) {
+	v := New()
+	err := v.Struct(nil)
+	if err == nil {
+		t.Fatal("expected error for nil input")
+	}
+	err = v.Struct("not-a-struct")
+	if err == nil {
+		t.Fatal("expected error for non-struct input")
+	}
+	err = v.Struct(42)
+	if err == nil {
+		t.Fatal("expected error for int input")
+	}
+}
+
+func TestStructCtxInvalidInput(t *testing.T) {
+	v := New()
+	err := v.StructCtx(context.Background(), nil)
+	if err == nil {
+		t.Fatal("expected error for nil input")
+	}
+}
+
+func TestVar(t *testing.T) {
+	v := New()
+	if err := v.Var("test@example.com", "required,email"); err != nil {
+		t.Fatalf("expected valid var: %v", err)
+	}
+}
+
+func TestVarInvalid(t *testing.T) {
+	v := New()
+	if err := v.Var("bad", "email"); err == nil {
+		t.Fatal("expected invalid var to fail")
+	}
+}
+
+func TestVarCtx(t *testing.T) {
+	v := New()
+	if err := v.VarCtx(context.Background(), "test@example.com", "required,email"); err != nil {
+		t.Fatalf("expected valid var: %v", err)
+	}
+}
+
+func TestOmitEmpty(t *testing.T) {
+	v := New()
+	if err := v.Var("", "omitempty,email"); err != nil {
+		t.Fatalf("expected omitempty to skip empty: %v", err)
+	}
+}
+
+func TestOmitZero(t *testing.T) {
+	v := New()
+	if err := v.Var(0, "omitzero,min=1"); err != nil {
+		t.Fatalf("expected omitzero to skip zero: %v", err)
+	}
+}
+
+func TestOmitNil(t *testing.T) {
+	v := New()
+	var ptr *int
+	if err := v.Var(ptr, "omitnil,min=1"); err != nil {
+		t.Fatalf("expected omitnil to skip nil: %v", err)
+	}
+}
+
+func TestDiveSlice(t *testing.T) {
+	v := New()
+	if err := v.Var([]string{"a", "b"}, "dive,required"); err != nil {
+		t.Fatalf("expected dive to pass: %v", err)
+	}
+	if err := v.Var([]string{"a", ""}, "dive,required"); err == nil {
+		t.Fatal("expected dive to fail for empty element")
+	}
+}
+
+func TestDiveMap(t *testing.T) {
+	v := New()
+	m := map[string]string{"key1": "a", "key2": "b"}
+	if err := v.Var(m, "dive,required"); err != nil {
+		t.Fatalf("expected dive map to pass: %v", err)
+	}
+}
+
+func TestDiveMapKeysEndKeys(t *testing.T) {
+	v := New()
+	m := map[string]string{"key1": "value1", "key2": "value2"}
+	if err := v.Var(m, "dive,keys,required,startswith=key,endkeys,required,startswith=value"); err != nil {
+		t.Fatalf("expected keys/endkeys map to pass: %v", err)
+	}
+}
+
+func TestDiveMapKeysEndKeysKeyFailure(t *testing.T) {
+	v := New()
+	err := v.Var(map[string]string{"bad": "value1"}, "dive,keys,required,startswith=key,endkeys,required")
+	if err == nil {
+		t.Fatal("expected keys validation to fail")
+	}
+	ve := err.(ValidationErrors)
+	if got := ve[0].Namespace(); got != "[bad]" {
+		t.Fatalf("expected key namespace [bad], got %q", got)
+	}
+}
+
+func TestDiveMapKeysEndKeysValueFailure(t *testing.T) {
+	v := New()
+	err := v.Var(map[string]string{"key1": ""}, "dive,keys,required,startswith=key,endkeys,required")
+	if err == nil {
+		t.Fatal("expected value validation to fail")
+	}
+	ve := err.(ValidationErrors)
+	if got := ve[0].Namespace(); got != "[key1]" {
+		t.Fatalf("expected value namespace [key1], got %q", got)
+	}
+}
+
+func TestDiveInvalidField(t *testing.T) {
+	v := New()
+	if err := v.Var(nil, "dive,required"); err != nil {
+		t.Fatalf("expected dive to skip nil: %v", err)
+	}
+}
+
+func TestRequiredWithAll(t *testing.T) {
+	type req struct {
+		A string `validate:"required_with_all=b c"`
+		B string `validate:""`
+		C string `validate:""`
+	}
+	v := New(WithRequiredStructEnabled())
+	if err := v.Struct(req{A: "", B: "val", C: "val"}); err == nil {
+		t.Fatal("expected required_with_all to fail when all fields present and A empty")
+	}
+	if err := v.Struct(req{A: "x", B: "val", C: "val"}); err != nil {
+		t.Fatalf("expected required_with_all to pass: %v", err)
+	}
+	if err := v.Struct(req{A: "", B: "val", C: ""}); err != nil {
+		t.Fatalf("expected required_with_all to skip when not all present: %v", err)
+	}
+}
+
+func TestRequiredWithAllEmptyParam(t *testing.T) {
+	type req struct {
+		A string `validate:"required_with_all="`
+	}
+	v := New(WithRequiredStructEnabled())
+	if err := v.Struct(req{}); err != nil {
+		t.Fatalf("expected required_with_all with empty param to skip: %v", err)
+	}
+}
+
+func TestRequiredWithoutAll(t *testing.T) {
+	type req struct {
+		A string `validate:"required_without_all=b c"`
+		B string `validate:""`
+		C string `validate:""`
+	}
+	v := New(WithRequiredStructEnabled())
+	if err := v.Struct(req{A: "", B: "", C: ""}); err == nil {
+		t.Fatal("expected required_without_all to fail when all absent and A empty")
+	}
+	if err := v.Struct(req{A: "x", B: "", C: ""}); err != nil {
+		t.Fatalf("expected required_without_all to pass: %v", err)
+	}
+	if err := v.Struct(req{A: "", B: "val", C: ""}); err != nil {
+		t.Fatalf("expected required_without_all to skip when some present: %v", err)
+	}
+}
+
+func TestRequiredWithoutAllEmptyParam(t *testing.T) {
+	type req struct {
+		A string `validate:"required_without_all="`
+	}
+	v := New(WithRequiredStructEnabled())
+	if err := v.Struct(req{}); err != nil {
+		t.Fatalf("expected required_without_all with empty param to skip: %v", err)
+	}
+}
+
+func TestExcludedIf(t *testing.T) {
+	type req struct {
+		Mode  string `validate:"required,oneof=sync async"`
+		Debug string `validate:"excluded_if=mode sync"`
+	}
+	v := New()
+	if err := v.Struct(req{Mode: "sync", Debug: ""}); err != nil {
+		t.Fatalf("expected excluded_if to pass when field empty: %v", err)
+	}
+}
+
+func TestExcludedUnless(t *testing.T) {
+	type req struct {
+		Mode  string `validate:"required,oneof=sync async"`
+		Debug string `validate:"excluded_unless=mode debug"`
+	}
+	v := New()
+	if err := v.Struct(req{Mode: "sync", Debug: ""}); err != nil {
+		t.Fatalf("expected excluded_unless to pass when field empty: %v", err)
+	}
+}
+
+func TestExcludedWith(t *testing.T) {
+	type req struct {
+		A string `validate:"excluded_with=b"`
+		B string `validate:""`
+	}
+	v := New()
+	if err := v.Struct(req{A: "", B: "val"}); err != nil {
+		t.Fatalf("expected excluded_with to pass when field empty: %v", err)
+	}
+}
+
+func TestExcludedWithAll(t *testing.T) {
+	type req struct {
+		A string `validate:"excluded_with_all=b c"`
+		B string `validate:""`
+		C string `validate:""`
+	}
+	v := New()
+	if err := v.Struct(req{A: "", B: "val", C: "val"}); err != nil {
+		t.Fatalf("expected excluded_with_all to pass when field empty: %v", err)
+	}
+}
+
+func TestExcludedWithout(t *testing.T) {
+	type req struct {
+		A string `validate:"excluded_without=b"`
+		B string `validate:""`
+	}
+	v := New()
+	if err := v.Struct(req{A: "", B: ""}); err != nil {
+		t.Fatalf("expected excluded_without to pass when field empty: %v", err)
+	}
+}
+
+func TestExcludedWithoutAll(t *testing.T) {
+	type req struct {
+		A string `validate:"excluded_without_all=b c"`
+		B string `validate:""`
+		C string `validate:""`
+	}
+	v := New()
+	if err := v.Struct(req{A: "", B: "", C: ""}); err != nil {
+		t.Fatalf("expected excluded_without_all to pass when field empty: %v", err)
+	}
+}
+
+func TestFieldContains(t *testing.T) {
+	type req struct {
+		Name    string `validate:"fieldcontains=Pattern"`
+		Pattern string `validate:""`
+	}
+	v := New()
+	if err := v.Struct(req{Name: "hello world", Pattern: "hello"}); err != nil {
+		t.Fatalf("expected fieldcontains to pass: %v", err)
+	}
+	if err := v.Struct(req{Name: "goodbye", Pattern: "hello"}); err == nil {
+		t.Fatal("expected fieldcontains to fail")
+	}
+}
+
+func TestFieldExcludes(t *testing.T) {
+	type req struct {
+		Name    string `validate:"fieldexcludes=Pattern"`
+		Pattern string `validate:""`
+	}
+	v := New()
+	if err := v.Struct(req{Name: "goodbye", Pattern: "hello"}); err != nil {
+		t.Fatalf("expected fieldexcludes to pass: %v", err)
+	}
+	if err := v.Struct(req{Name: "hello world", Pattern: "hello"}); err == nil {
+		t.Fatal("expected fieldexcludes to fail")
+	}
+}
+
+func TestRangeRule(t *testing.T) {
+	type req struct {
+		Min int `validate:""`
+		Max int `validate:"range=Min|Max"`
+	}
+	v := New()
+	if err := v.Struct(req{Min: 1, Max: 10}); err != nil {
+		t.Fatalf("expected range to pass: %v", err)
+	}
+	if err := v.Struct(req{Min: 10, Max: 1}); err == nil {
+		t.Fatal("expected range to fail for min > max")
+	}
+}
+
+func TestRangeInvalidParts(t *testing.T) {
+	type req struct {
+		Start int `validate:"range=Onlyone"`
+	}
+	v := New()
+	if err := v.Struct(req{Start: 1}); err == nil {
+		t.Fatal("expected range to fail for single field")
+	}
+}
+
+func TestRangeInvalidField(t *testing.T) {
+	type req struct {
+		Start int `validate:"range=Missing|End"`
+		End   int `validate:""`
+	}
+	v := New()
+	if err := v.Struct(req{Start: 1, End: 10}); err == nil {
+		t.Fatal("expected range to fail for missing field")
+	}
+}
+
+func TestEqField(t *testing.T) {
+	type req struct {
+		Password string `validate:"required"`
+		Confirm  string `validate:"required,eqfield=password"`
+	}
+	v := New()
+	if err := v.Struct(req{Password: "abc", Confirm: "abc"}); err != nil {
+		t.Fatalf("expected eqfield to pass: %v", err)
+	}
+	if err := v.Struct(req{Password: "abc", Confirm: "xyz"}); err == nil {
+		t.Fatal("expected eqfield to fail")
+	}
+}
+
+func TestNeField(t *testing.T) {
+	type req struct {
+		Old string `validate:""`
+		New string `validate:"nefield=old"`
+	}
+	v := New()
+	if err := v.Struct(req{Old: "abc", New: "xyz"}); err != nil {
+		t.Fatalf("expected nefield to pass: %v", err)
+	}
+}
+
+func TestGtField(t *testing.T) {
+	type req struct {
+		Min int `validate:""`
+		Max int `validate:"gtfield=min"`
+	}
+	v := New()
+	if err := v.Struct(req{Min: 5, Max: 10}); err != nil {
+		t.Fatalf("expected gtfield to pass: %v", err)
+	}
+}
+
+func TestGteField(t *testing.T) {
+	type req struct {
+		Min int `validate:""`
+		Max int `validate:"gtefield=min"`
+	}
+	v := New()
+	if err := v.Struct(req{Min: 5, Max: 5}); err != nil {
+		t.Fatalf("expected gtefield to pass: %v", err)
+	}
+}
+
+func TestLtField(t *testing.T) {
+	type req struct {
+		Min int `validate:"ltfield=max"`
+		Max int `validate:""`
+	}
+	v := New()
+	if err := v.Struct(req{Min: 5, Max: 10}); err != nil {
+		t.Fatalf("expected ltfield to pass: %v", err)
+	}
+}
+
+func TestLteField(t *testing.T) {
+	type req struct {
+		Min int `validate:"ltefield=max"`
+		Max int `validate:""`
+	}
+	v := New()
+	if err := v.Struct(req{Min: 5, Max: 5}); err != nil {
+		t.Fatalf("expected ltefield to pass: %v", err)
+	}
+}
+
+func TestFieldLen(t *testing.T) {
+	// 默认 eq 比较 — slice
+	type req struct {
+		Tags  []string `validate:"required,fieldlen=Names"`
+		Names []string `validate:"required"`
+	}
+	v := New()
+	if err := v.Struct(req{Tags: []string{"a", "b"}, Names: []string{"x", "y"}}); err != nil {
+		t.Fatalf("expected fieldlen (eq) to pass: %v", err)
+	}
+	if err := v.Struct(req{Tags: []string{"a"}, Names: []string{"x", "y"}}); err == nil {
+		t.Fatal("expected fieldlen (eq) to fail on different lengths")
+	}
+}
+
+func TestFieldLenString(t *testing.T) {
+	// string 长度比较
+	type req struct {
+		Code string `validate:"required,fieldlen=Names"`
+		Name string `validate:"required" json:"Names"`
+	}
+	v := New()
+	if err := v.Struct(req{Code: "ab", Name: "xy"}); err != nil {
+		t.Fatalf("expected fieldlen (string eq) to pass: %v", err)
+	}
+	if err := v.Struct(req{Code: "a", Name: "xy"}); err == nil {
+		t.Fatal("expected fieldlen (string eq) to fail on different lengths")
+	}
+}
+
+func TestFieldLenWithOp(t *testing.T) {
+	// gt 操作符
+	type reqGT struct {
+		Tags  []string `validate:"required,fieldlen=gt:Names"`
+		Names []string `validate:"required"`
+	}
+	v := New()
+	if err := v.Struct(reqGT{Tags: []string{"a", "b", "c"}, Names: []string{"x", "y"}}); err != nil {
+		t.Fatalf("expected fieldlen (gt) to pass: %v", err)
+	}
+	if err := v.Struct(reqGT{Tags: []string{"a"}, Names: []string{"x", "y"}}); err == nil {
+		t.Fatal("expected fieldlen (gt) to fail")
+	}
+	// gt 相等时也应失败
+	if err := v.Struct(reqGT{Tags: []string{"a", "b"}, Names: []string{"x", "y"}}); err == nil {
+		t.Fatal("expected fieldlen (gt) to fail when equal")
+	}
+}
+
+func TestFieldLenWithOpGTE(t *testing.T) {
+	type req struct {
+		Tags  []string `validate:"required,fieldlen=gte:Names"`
+		Names []string `validate:"required"`
+	}
+	v := New()
+	// 大于
+	if err := v.Struct(req{Tags: []string{"a", "b", "c"}, Names: []string{"x", "y"}}); err != nil {
+		t.Fatalf("expected fieldlen (gte) to pass when greater: %v", err)
+	}
+	// 等于
+	if err := v.Struct(req{Tags: []string{"a", "b"}, Names: []string{"x", "y"}}); err != nil {
+		t.Fatalf("expected fieldlen (gte) to pass when equal: %v", err)
+	}
+	// 小于
+	if err := v.Struct(req{Tags: []string{"a"}, Names: []string{"x", "y"}}); err == nil {
+		t.Fatal("expected fieldlen (gte) to fail when less")
+	}
+}
+
+func TestFieldLenWithOpLT(t *testing.T) {
+	type req struct {
+		Tags  []string `validate:"required,fieldlen=lt:Names"`
+		Names []string `validate:"required"`
+	}
+	v := New()
+	if err := v.Struct(req{Tags: []string{"a"}, Names: []string{"x", "y"}}); err != nil {
+		t.Fatalf("expected fieldlen (lt) to pass: %v", err)
+	}
+	if err := v.Struct(req{Tags: []string{"a", "b"}, Names: []string{"x", "y"}}); err == nil {
+		t.Fatal("expected fieldlen (lt) to fail when equal")
+	}
+}
+
+func TestFieldLenWithOpLTE(t *testing.T) {
+	type req struct {
+		Tags  []string `validate:"required,fieldlen=lte:Names"`
+		Names []string `validate:"required"`
+	}
+	v := New()
+	// 小于
+	if err := v.Struct(req{Tags: []string{"a"}, Names: []string{"x", "y"}}); err != nil {
+		t.Fatalf("expected fieldlen (lte) to pass when less: %v", err)
+	}
+	// 等于
+	if err := v.Struct(req{Tags: []string{"a", "b"}, Names: []string{"x", "y"}}); err != nil {
+		t.Fatalf("expected fieldlen (lte) to pass when equal: %v", err)
+	}
+	// 大于
+	if err := v.Struct(req{Tags: []string{"a", "b", "c"}, Names: []string{"x", "y"}}); err == nil {
+		t.Fatal("expected fieldlen (lte) to fail when greater")
+	}
+}
+
+func TestFieldLenWithOpNE(t *testing.T) {
+	type req struct {
+		Tags  []string `validate:"required,fieldlen=ne:Names"`
+		Names []string `validate:"required"`
+	}
+	v := New()
+	if err := v.Struct(req{Tags: []string{"a"}, Names: []string{"x", "y"}}); err != nil {
+		t.Fatalf("expected fieldlen (ne) to pass on different lengths: %v", err)
+	}
+	if err := v.Struct(req{Tags: []string{"a", "b"}, Names: []string{"x", "y"}}); err == nil {
+		t.Fatal("expected fieldlen (ne) to fail when equal")
+	}
+}
+
+func TestFieldLenMap(t *testing.T) {
+	// map 长度比较
+	type req struct {
+		Images map[string]string `validate:"required,fieldlen=Names"`
+		Names  []string          `validate:"required"`
+	}
+	v := New()
+	if err := v.Struct(req{Images: map[string]string{"a": "1", "b": "2"}, Names: []string{"x", "y"}}); err != nil {
+		t.Fatalf("expected fieldlen (map) to pass: %v", err)
+	}
+	if err := v.Struct(req{Images: map[string]string{"a": "1"}, Names: []string{"x", "y"}}); err == nil {
+		t.Fatal("expected fieldlen (map) to fail on different lengths")
+	}
+}
+
+func TestFieldLenMapToMap(t *testing.T) {
+	// map 与 map 长度比较
+	type req struct {
+		Images map[string]string `validate:"required,fieldlen=Labels"`
+		Labels map[string]string `validate:"required"`
+	}
+	v := New()
+	if err := v.Struct(req{Images: map[string]string{"a": "1", "b": "2"}, Labels: map[string]string{"x": "1", "y": "2"}}); err != nil {
+		t.Fatalf("expected fieldlen (map-map) to pass: %v", err)
+	}
+	if err := v.Struct(req{Images: map[string]string{"a": "1"}, Labels: map[string]string{"x": "1", "y": "2"}}); err == nil {
+		t.Fatal("expected fieldlen (map-map) to fail on different lengths")
+	}
+}
+
+func TestFieldLenCrossLevel(t *testing.T) {
+	// 跨层级访问
+	type inner struct {
+		Names []string `validate:"required"`
+	}
+	type req struct {
+		Tags  []string `validate:"required,fieldlen=Inner.Names"`
+		Inner inner    `validate:""`
+	}
+	v := New()
+	if err := v.Struct(req{Tags: []string{"a", "b"}, Inner: inner{Names: []string{"x", "y"}}}); err != nil {
+		t.Fatalf("expected fieldlen (cross-level) to pass: %v", err)
+	}
+	if err := v.Struct(req{Tags: []string{"a"}, Inner: inner{Names: []string{"x", "y"}}}); err == nil {
+		t.Fatal("expected fieldlen (cross-level) to fail on different lengths")
+	}
+}
+
+func TestFieldLenErrorMessage(t *testing.T) {
+	type req struct {
+		Tags  []string `validate:"required,fieldlen=Names"`
+		Names []string `validate:"required"`
+	}
+	v := New()
+	err := v.Struct(req{Tags: []string{"a"}, Names: []string{"x", "y"}})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	msgs := TranslateValidationErrors(err, "en")
+	if len(msgs) == 0 {
+		t.Fatal("expected translated error messages")
+	}
+	found := false
+	for _, m := range msgs {
+		if m.Tag == "fieldlen" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected fieldlen tag in error messages, got: %+v", msgs)
+	}
+}
+
+func TestEqCsField(t *testing.T) {
+	type inner struct {
+		Value string `validate:"eqcsfield=Name"`
+	}
+	type outer struct {
+		Name  string `validate:""`
+		Inner inner  `validate:""`
+	}
+	v := New()
+	if err := v.Struct(outer{Name: "test", Inner: inner{Value: "test"}}); err != nil {
+		t.Fatalf("expected eqcsfield to pass: %v", err)
+	}
+}
+
+func TestNeCsField(t *testing.T) {
+	type inner struct {
+		Value string `validate:"necsfield=Name"`
+	}
+	type outer struct {
+		Name  string `validate:""`
+		Inner inner  `validate:""`
+	}
+	v := New()
+	if err := v.Struct(outer{Name: "test", Inner: inner{Value: "other"}}); err != nil {
+		t.Fatalf("expected necsfield to pass: %v", err)
+	}
+}
+
+func TestGtCsField(t *testing.T) {
+	type inner struct {
+		Value int `validate:"gtcsfield=Min"`
+	}
+	type outer struct {
+		Min   int   `validate:""`
+		Inner inner `validate:""`
+	}
+	v := New()
+	if err := v.Struct(outer{Min: 5, Inner: inner{Value: 10}}); err != nil {
+		t.Fatalf("expected gtcsfield to pass: %v", err)
+	}
+}
+
+func TestGteCsField(t *testing.T) {
+	type inner struct {
+		Value int `validate:"gtecsfield=Min"`
+	}
+	type outer struct {
+		Min   int   `validate:""`
+		Inner inner `validate:""`
+	}
+	v := New()
+	if err := v.Struct(outer{Min: 5, Inner: inner{Value: 5}}); err != nil {
+		t.Fatalf("expected gtecsfield to pass: %v", err)
+	}
+}
+
+func TestLtCsField(t *testing.T) {
+	type inner struct {
+		Value int `validate:"ltcsfield=Max"`
+	}
+	type outer struct {
+		Max   int   `validate:""`
+		Inner inner `validate:""`
+	}
+	v := New()
+	if err := v.Struct(outer{Max: 10, Inner: inner{Value: 5}}); err != nil {
+		t.Fatalf("expected ltcsfield to pass: %v", err)
+	}
+}
+
+func TestLteCsField(t *testing.T) {
+	type inner struct {
+		Value int `validate:"ltecsfield=Max"`
+	}
+	type outer struct {
+		Max   int   `validate:""`
+		Inner inner `validate:""`
+	}
+	v := New()
+	if err := v.Struct(outer{Max: 10, Inner: inner{Value: 10}}); err != nil {
+		t.Fatalf("expected ltecsfield to pass: %v", err)
+	}
+}
+
+func TestAfterBefore(t *testing.T) {
+	type req struct {
+		Start time.Time `validate:"after=now"`
+		End   time.Time `validate:"before=now"`
+	}
+	v := New()
+	now := time.Now()
+	if err := v.Struct(req{Start: now.Add(time.Hour), End: now.Add(-time.Hour)}); err != nil {
+		t.Fatalf("expected after/before to pass: %v", err)
+	}
+}
+
+func TestJoinNS(t *testing.T) {
+	if utils.JoinNS("", "child") != "child" {
+		t.Fatal("expected child for empty parent")
+	}
+	if utils.JoinNS("parent", "") != "parent" {
+		t.Fatal("expected parent for empty child")
+	}
+	if utils.JoinNS("parent", "child") != "parent.child" {
+		t.Fatal("expected parent.child")
+	}
+}
+
+func TestStructNoValidateTag(t *testing.T) {
+	type noTag struct {
+		Name string
+	}
+	v := New()
+	if err := v.Struct(noTag{Name: "test"}); err != nil {
+		t.Fatalf("expected struct without tags to pass: %v", err)
+	}
+}
+
+func TestStructDiveIntoNestedStruct(t *testing.T) {
+	type address struct {
+		City string `validate:"required"`
+	}
+	type person struct {
+		Name    string  `validate:"required"`
+		Address address `validate:""`
+	}
+	v := New(WithRequiredStructEnabled())
+	if err := v.Struct(person{Name: "John", Address: address{City: "NYC"}}); err != nil {
+		t.Fatalf("expected nested struct to pass: %v", err)
+	}
+	if err := v.Struct(person{Name: "John", Address: address{City: ""}}); err == nil {
+		t.Fatal("expected nested struct to fail for empty city")
+	}
+}
+
+func TestStructOnlyNoDive(t *testing.T) {
+	type inner struct {
+		Value string `validate:"required"`
+	}
+	type outer struct {
+		Name  string `validate:"required"`
+		Inner inner  `validate:"structonly"`
+	}
+	v := New(WithRequiredStructEnabled())
+	if err := v.Struct(outer{Name: "test", Inner: inner{Value: ""}}); err != nil {
+		t.Fatalf("expected structonly to skip inner validation: %v", err)
+	}
+}
+
+func TestNoStructLevel(t *testing.T) {
+	type inner struct {
+		Value string `validate:"required"`
+	}
+	type outer struct {
+		Name  string `validate:"required"`
+		Inner inner  `validate:"nostructlevel"`
+	}
+	v := New(WithRequiredStructEnabled())
+	if err := v.Struct(outer{Name: "test", Inner: inner{Value: ""}}); err != nil {
+		t.Fatalf("expected nostructlevel to skip inner validation: %v", err)
+	}
+}
+
+func TestUnknownRule(t *testing.T) {
+	v := New()
+	if err := v.Var("test", "unknown_rule"); err == nil {
+		t.Fatal("expected unknown rule to fail")
+	}
+}
+
+func TestEmptyRule(t *testing.T) {
+	v := New()
+	if err := v.Var("test", ""); err != nil {
+		t.Fatalf("expected empty rule to pass: %v", err)
+	}
+}
+
+func TestCustomValidationCtx(t *testing.T) {
+	v := New()
+	err := v.RegisterValidationCtx("ctx_check", func(ctx context.Context, fl FieldLevel) bool {
+		return fl.Param() != ""
+	})
+	if err != nil {
+		t.Fatalf("expected no error: %v", err)
+	}
+	if err := v.Var("test", "ctx_check=hello"); err != nil {
+		t.Fatalf("expected ctx_check to pass: %v", err)
+	}
+}
+
+func TestFieldContainsNonString(t *testing.T) {
+	type req struct {
+		Count   int    `validate:"fieldcontains=X"`
+		Pattern string `validate:""`
+	}
+	v := New()
+	if err := v.Struct(req{Count: 1, Pattern: "x"}); err == nil {
+		t.Fatal("expected fieldcontains to fail for non-string field")
+	}
+}
+
+func TestFieldContainsMissingField(t *testing.T) {
+	type req struct {
+		Name string `validate:"fieldcontains=Missing"`
+	}
+	v := New()
+	if err := v.Struct(req{Name: "hello"}); err == nil {
+		t.Fatal("expected fieldcontains to fail for missing field")
+	}
+}
+
+func TestFieldContainsNonStringOther(t *testing.T) {
+	type req struct {
+		Name  string `validate:"fieldcontains=Count"`
+		Count int    `validate:""`
+	}
+	v := New()
+	if err := v.Struct(req{Name: "1", Count: 1}); err != nil {
+		t.Fatalf("expected fieldcontains to pass for int via scalarString: %v", err)
+	}
+}
+
+func TestRequiredWithout(t *testing.T) {
+	type req struct {
+		A string `validate:"required_without=b"`
+		B string `validate:""`
+	}
+	v := New(WithRequiredStructEnabled())
+	if err := v.Struct(req{A: "", B: ""}); err == nil {
+		t.Fatal("expected required_without to fail when both empty")
+	}
+	if err := v.Struct(req{A: "x", B: ""}); err != nil {
+		t.Fatalf("expected required_without to pass: %v", err)
+	}
+}
+
+func TestRequiredWithoutNoneEmpty(t *testing.T) {
+	type req struct {
+		A string `validate:"required_without=b"`
+		B string `validate:""`
+	}
+	v := New(WithRequiredStructEnabled())
+	if err := v.Struct(req{A: "", B: "val"}); err != nil {
+		t.Fatalf("expected required_without to skip when B present: %v", err)
+	}
+}
+
+func TestExcludedIfConditionMet(t *testing.T) {
+	type req struct {
+		Mode  string `validate:"required"`
+		Debug string `validate:"excluded_if=mode sync"`
+	}
+	v := New()
+	err := v.Struct(req{Mode: "sync", Debug: "true"})
+	if err == nil {
+		t.Fatal("expected excluded_if to fail when condition met and field not empty")
+	}
+}
+
+func TestExcludedUnlessConditionMet(t *testing.T) {
+	type req struct {
+		Mode  string `validate:"required"`
+		Debug string `validate:"excluded_unless=mode debug"`
+	}
+	v := New()
+	err := v.Struct(req{Mode: "sync", Debug: "true"})
+	if err == nil {
+		t.Fatal("expected excluded_unless to fail when condition not met and field not empty")
+	}
+}
+
+func TestExcludedWithFieldPresentValue(t *testing.T) {
+	type req struct {
+		A string `validate:"excluded_with=b"`
+		B string `validate:""`
+	}
+	v := New()
+	err := v.Struct(req{A: "val", B: "val"})
+	if err == nil {
+		t.Fatal("expected excluded_with to fail when B present and A not empty")
+	}
+}
+
+func TestExcludedWithAllAllPresent(t *testing.T) {
+	type req struct {
+		A string `validate:"excluded_with_all=b c"`
+		B string `validate:""`
+		C string `validate:""`
+	}
+	v := New()
+	err := v.Struct(req{A: "val", B: "val", C: "val"})
+	if err == nil {
+		t.Fatal("expected excluded_with_all to fail when all present and A not empty")
+	}
+}
+
+func TestExcludedWithoutFieldAbsent(t *testing.T) {
+	type req struct {
+		A string `validate:"excluded_without=b"`
+		B string `validate:""`
+	}
+	v := New()
+	err := v.Struct(req{A: "val", B: ""})
+	if err == nil {
+		t.Fatal("expected excluded_without to fail when B absent and A not empty")
+	}
+}
+
+func TestExcludedWithoutAllAllAbsent(t *testing.T) {
+	type req struct {
+		A string `validate:"excluded_without_all=b c"`
+		B string `validate:""`
+		C string `validate:""`
+	}
+	v := New()
+	err := v.Struct(req{A: "val", B: "", C: ""})
+	if err == nil {
+		t.Fatal("expected excluded_without_all to fail when all absent and A not empty")
+	}
+}
+
+func TestApplyRulesEmpty(t *testing.T) {
+	v := New()
+	sc := evalScope{ctx: context.Background()}
+	names := rule.FieldNames{NS: "ns", StructNS: "sns", Field: "f", StructField: "sf"}
+	v.applyRules(&sc, &names, "ns", "sns", reflect.ValueOf("test"), nil)
+	if sc.errCount() != 0 {
+		t.Fatal("expected no errors for empty rules")
+	}
+	// 规则为空时不应触碰对象池
+	if sc.errs != nil {
+		t.Fatal("空规则不应从池里取错误切片")
+	}
+}
+
+func TestStructPtrInput(t *testing.T) {
+	type req struct {
+		Name string `validate:"required"`
+	}
+	v := New(WithRequiredStructEnabled())
+	r := &req{Name: "test"}
+	if err := v.Struct(r); err != nil {
+		t.Fatalf("expected pointer to struct to pass: %v", err)
+	}
+}
+
+func TestStructNilPtrInput(t *testing.T) {
+	type req struct {
+		Name string `validate:"required"`
+	}
+	v := New()
+	var r *req
+	err := v.Struct(r)
+	if err == nil {
+		t.Fatal("expected nil pointer to struct to fail")
+	}
+}
+
+func TestBeforeField(t *testing.T) {
+	type req struct {
+		Start time.Time `validate:"beforefield=end"`
+		End   time.Time `validate:""`
+	}
+	v := New()
+	now := time.Now()
+	if err := v.Struct(req{Start: now, End: now.Add(time.Hour)}); err != nil {
+		t.Fatalf("expected beforefield to pass: %v", err)
+	}
+}
+
+func TestAfterField(t *testing.T) {
+	type req struct {
+		End   time.Time `validate:"afterfield=start"`
+		Start time.Time `validate:""`
+	}
+	v := New()
+	now := time.Now()
+	if err := v.Struct(req{Start: now, End: now.Add(time.Hour)}); err != nil {
+		t.Fatalf("expected afterfield to pass: %v", err)
+	}
+}
+
+func TestRequiredUnless(t *testing.T) {
+	type req struct {
+		Name string `validate:"required_unless=mode guest"`
+		Mode string `validate:""`
+	}
+	v := New(WithRequiredStructEnabled())
+	if err := v.Struct(req{Name: "", Mode: "guest"}); err != nil {
+		t.Fatalf("expected required_unless to skip when condition met: %v", err)
+	}
+	if err := v.Struct(req{Name: "", Mode: "admin"}); err == nil {
+		t.Fatal("expected required_unless to fail when condition not met")
+	}
+}
+
+func TestRequiredWith(t *testing.T) {
+	type req struct {
+		A string `validate:"required_with=b"`
+		B string `validate:""`
+	}
+	v := New(WithRequiredStructEnabled())
+	if err := v.Struct(req{A: "", B: "val"}); err == nil {
+		t.Fatal("expected required_with to fail when B present and A empty")
+	}
+	if err := v.Struct(req{A: "x", B: "val"}); err != nil {
+		t.Fatalf("expected required_with to pass: %v", err)
+	}
+	if err := v.Struct(req{A: "", B: ""}); err != nil {
+		t.Fatalf("expected required_with to skip when B absent: %v", err)
+	}
+}
+
+func TestDiveSliceWithIndex(t *testing.T) {
+	type req struct {
+		Tags []string `validate:"dive,required"`
+	}
+	v := New(WithRequiredStructEnabled())
+	if err := v.Struct(req{Tags: []string{"a", "b"}}); err != nil {
+		t.Fatalf("expected dive to pass: %v", err)
+	}
+	err := v.Struct(req{Tags: []string{"a", ""}})
+	if err == nil {
+		t.Fatal("expected dive to fail for empty element")
+	}
+	ve := err.(ValidationErrors)
+	if !containsString(ve[0].Namespace(), "[1]") {
+		t.Fatalf("expected index in namespace, got %s", ve[0].Namespace())
+	}
+}
+
+func TestDiveMapWithKey(t *testing.T) {
+	type req struct {
+		Meta map[string]string `validate:"dive,required"`
+	}
+	v := New(WithRequiredStructEnabled())
+	err := v.Struct(req{Meta: map[string]string{"key": ""}})
+	if err == nil {
+		t.Fatal("expected dive map to fail for empty value")
+	}
+	ve := err.(ValidationErrors)
+	if !containsString(ve[0].Namespace(), "[key]") {
+		t.Fatalf("expected key in namespace, got %s", ve[0].Namespace())
+	}
+}
+
+func containsString(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsSubstring(s, substr))
+}
+
+func containsSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
+
+func TestRangeCommaSeparator(t *testing.T) {
+	type req struct {
+		Min int `validate:""`
+		Max int `validate:"range=Min|Max"`
+	}
+	v := New()
+	if err := v.Struct(req{Min: 1, Max: 10}); err != nil {
+		t.Fatalf("expected range with pipe separator to pass: %v", err)
+	}
+}
+
+func TestValidateStructNonStruct(t *testing.T) {
+	v := New()
+	if err := v.Struct("hello"); err == nil {
+		t.Fatal("expected Struct to fail for non-struct")
+	}
+}
+
+func TestApplyRulesOmitEmptyEmpty(t *testing.T) {
+	type req struct {
+		Name string `validate:"omitempty,min=5"`
+	}
+	v := New()
+	if err := v.Struct(req{Name: ""}); err != nil {
+		t.Fatalf("expected omitempty to skip empty: %v", err)
+	}
+}
+
+func TestApplyRulesOmitZeroZero(t *testing.T) {
+	type req struct {
+		Count int `validate:"omitzero,min=5"`
+	}
+	v := New()
+	if err := v.Struct(req{Count: 0}); err != nil {
+		t.Fatalf("expected omitzero to skip zero: %v", err)
+	}
+}
+
+func TestApplyRulesOmitNilNil(t *testing.T) {
+	type req struct {
+		Ptr *string `validate:"omitnil,min=1"`
+	}
+	v := New()
+	if err := v.Struct(req{Ptr: nil}); err != nil {
+		t.Fatalf("expected omitnil to skip nil: %v", err)
+	}
+}
+
+func TestEvalRuleCustomValidation(t *testing.T) {
+	v := New()
+	if err := v.RegisterValidationCtx("custom", func(ctx context.Context, fl FieldLevel) bool {
+		return fl.Field().String() == "valid"
+	}); err != nil {
+		t.Fatalf("failed to register custom validation: %v", err)
+	}
+	if err := v.Var("invalid", "custom"); err == nil {
+		t.Fatal("expected custom validation to fail")
+	}
+	if err := v.Var("valid", "custom"); err != nil {
+		t.Fatalf("expected custom validation to pass: %v", err)
+	}
+}
+
+func TestRenderTranslationDefaultFallback(t *testing.T) {
+	SetLocale("en")
+	type req struct {
+		Name string `validate:"required"`
+	}
+	v := New(WithRequiredStructEnabled())
+	err := v.Struct(req{})
+	if err == nil {
+		t.Fatal("expected required to fail")
+	}
+	msg := TranslateValidationErrors(err, "en")
+	if len(msg) == 0 || msg[0].Message == "" {
+		t.Fatal("expected non-empty translated message")
+	}
+}
+
+func TestFieldContainsNonStringOtherScalar(t *testing.T) {
+	type req struct {
+		Name  string `validate:"fieldcontains=Count"`
+		Count int    `validate:""`
+	}
+	v := New()
+	if err := v.Struct(req{Name: "5", Count: 5}); err != nil {
+		t.Fatalf("expected fieldcontains to pass with int field: %v", err)
+	}
+}
+
+func TestRuleRangeFieldNotFound(t *testing.T) {
+	type req struct {
+		Start int `validate:"range=NonExistent|End"`
+		End   int `validate:""`
+	}
+	v := New()
+	if err := v.Struct(req{Start: 1, End: 10}); err == nil {
+		t.Fatal("expected range to fail for non-existent field")
+	}
+}
+
+func TestRuleRangeEndFieldNotFound(t *testing.T) {
+	type req struct {
+		Start int `validate:"range=End|NonExistent"`
+		End   int `validate:""`
+	}
+	v := New()
+	if err := v.Struct(req{Start: 1, End: 10}); err == nil {
+		t.Fatal("expected range to fail for non-existent end field")
+	}
+}
+
+func TestValidateStructNestedNoError(t *testing.T) {
+	type inner struct {
+		Name string `validate:"required"`
+	}
+	type outer struct {
+		Inner inner `validate:"structonly"`
+	}
+	v := New(WithRequiredStructEnabled())
+	if err := v.Struct(outer{Inner: inner{Name: "ok"}}); err != nil {
+		t.Fatalf("expected struct to pass: %v", err)
+	}
+}
+
+func TestDiveInvalidKind(t *testing.T) {
+	type req struct {
+		Name string `validate:"dive,required"`
+	}
+	v := New(WithRequiredStructEnabled())
+	if err := v.Struct(req{Name: "hello"}); err != nil {
+		t.Fatalf("expected dive on non-slice/map to silently pass: %v", err)
+	}
+}
+
+func TestRequiredWithFieldEmpty(t *testing.T) {
+	type req struct {
+		A string `validate:"required_with=B"`
+		B string `validate:""`
+	}
+	v := New()
+	if err := v.Struct(req{A: "", B: "present"}); err == nil {
+		t.Fatal("expected required_with to fail when A empty and B present")
+	}
+}
+
+func TestExcludedWithFieldPresent2(t *testing.T) {
+	type req struct {
+		A string `validate:"excluded_with=B"`
+		B string `validate:""`
+	}
+	v := New()
+	if err := v.Struct(req{A: "value", B: "present"}); err == nil {
+		t.Fatal("expected excluded_with to fail when A has value and B present")
+	}
+}
+
+func TestExcludedWithoutFieldAbsent2(t *testing.T) {
+	type req struct {
+		A string `validate:"excluded_without=B"`
+		B string `validate:""`
+	}
+	v := New()
+	if err := v.Struct(req{A: "value", B: ""}); err == nil {
+		t.Fatal("expected excluded_without to fail when A has value and B absent")
+	}
+}
+
+func TestExcludedWithoutAllNonePresent2(t *testing.T) {
+	type req struct {
+		A string `validate:"excluded_without_all=B C"`
+		B string `validate:""`
+		C string `validate:""`
+	}
+	v := New()
+	if err := v.Struct(req{A: "value", B: "", C: ""}); err == nil {
+		t.Fatal("expected excluded_without_all to fail when A has value and B,C absent")
+	}
+}
+
+func TestRequiredUnlessConditionTrue(t *testing.T) {
+	type req struct {
+		A string `validate:"required_unless=Mode off"`
+		B string `validate:""`
+	}
+	v := New()
+	if err := v.Struct(req{A: "", B: ""}); err == nil {
+		t.Fatal("expected required_unless to fail when condition not met")
+	}
+}
+
+func TestExcludedUnlessConditionTrue(t *testing.T) {
+	type req struct {
+		A string `validate:"excluded_unless=Mode on"`
+		B string `validate:""`
+	}
+	v := New()
+	if err := v.Struct(req{A: "value", B: ""}); err == nil {
+		t.Fatal("expected excluded_unless to fail when condition not met and A has value")
+	}
+}
+
+func TestExcludedWithAllAllPresent2(t *testing.T) {
+	type req struct {
+		A string `validate:"excluded_with_all=B C"`
+		B string `validate:""`
+		C string `validate:""`
+	}
+	v := New()
+	if err := v.Struct(req{A: "value", B: "b", C: "c"}); err == nil {
+		t.Fatal("expected excluded_with_all to fail when A has value and B,C present")
+	}
+}
+
+func TestValidateStructNestedNonStruct(t *testing.T) {
+	type inner struct {
+		Name string `validate:"required"`
+	}
+	type outer struct {
+		Inner *inner `validate:""`
+	}
+	v := New(WithRequiredStructEnabled())
+	if err := v.Struct(outer{Inner: &inner{Name: "ok"}}); err != nil {
+		t.Fatalf("expected nested struct ptr to pass: %v", err)
+	}
+}
+
+func TestRenderTranslationUnknownTag(t *testing.T) {
+	v := New()
+	if err := v.RegisterValidation("unknowntag", func(fl FieldLevel) bool {
+		return false
+	}); err != nil {
+		t.Fatalf("failed to register unknowntag validation: %v", err)
+	}
+	err := v.Var("test", "unknowntag")
+	if err == nil {
+		t.Fatal("expected unknowntag to fail")
+	}
+	ve := err.(ValidationErrors)
+	msgs := ve.Translate("xx")
+	if len(msgs) == 0 {
+		t.Fatal("expected translation message")
+	}
+	if msgs[0].Message == "" {
+		t.Fatal("expected non-empty message from fe.Error() fallback")
+	}
+}
+
+func TestRenderTranslationNilError(t *testing.T) {
+	msg := TranslateValidationErrors(nil, "en")
+	if msg != nil {
+		t.Fatal("expected nil for nil error")
+	}
+}
+
+func TestRenderTranslationNonValidationError(t *testing.T) {
+	msg := TranslateValidationErrors(fmt.Errorf("some error"), "en")
+	if len(msg) == 0 || msg[0].Message != "some error" {
+		t.Fatal("expected error message as fallback")
+	}
+}
+
+func TestApplyRulesOmitNil(t *testing.T) {
+	type req struct {
+		Ptr *string `validate:"omitnil,required"`
+	}
+	v := New(WithRequiredStructEnabled())
+	s := "hello"
+	if err := v.Struct(req{Ptr: &s}); err != nil {
+		t.Fatalf("expected omitnil to continue when field not nil: %v", err)
+	}
+	if err := v.Struct(req{Ptr: nil}); err != nil {
+		t.Fatalf("expected omitnil to skip nil pointer: %v", err)
+	}
+}
+
+func TestApplyRulesStructOnly(t *testing.T) {
+	type inner struct {
+		Name string `validate:"required"`
+	}
+	type outer struct {
+		Inner inner `validate:"structonly"`
+	}
+	v := New(WithRequiredStructEnabled())
+	if err := v.Struct(outer{Inner: inner{Name: ""}}); err != nil {
+		t.Fatalf("expected structonly to skip nested validation: %v", err)
+	}
+}
+
+func TestApplyRulesNoStructLevel(t *testing.T) {
+	type inner struct {
+		Name string `validate:"required"`
+	}
+	type outer struct {
+		Inner inner `validate:"nostructlevel"`
+	}
+	v := New(WithRequiredStructEnabled())
+	if err := v.Struct(outer{Inner: inner{Name: ""}}); err != nil {
+		t.Fatalf("expected nostructlevel to skip nested validation: %v", err)
+	}
+}
+
+func TestEvalRuleExcludedWith(t *testing.T) {
+	type req struct {
+		A string `validate:"excluded_with=B"`
+		B string `validate:""`
+	}
+	v := New()
+	if err := v.Struct(req{A: "", B: "present"}); err != nil {
+		t.Fatalf("expected excluded_with to pass when A empty and B present: %v", err)
+	}
+}
+
+func TestEvalRuleExcludedWithAll(t *testing.T) {
+	type req struct {
+		A string `validate:"excluded_with_all=B C"`
+		B string `validate:""`
+		C string `validate:""`
+	}
+	v := New()
+	if err := v.Struct(req{A: "", B: "b", C: "c"}); err != nil {
+		t.Fatalf("expected excluded_with_all to pass when A empty: %v", err)
+	}
+}
+
+func TestEvalRuleExcludedWithout(t *testing.T) {
+	type req struct {
+		A string `validate:"excluded_without=B"`
+		B string `validate:""`
+	}
+	v := New()
+	if err := v.Struct(req{A: "", B: "present"}); err != nil {
+		t.Fatalf("expected excluded_without to pass when A empty and B present: %v", err)
+	}
+}
+
+func TestEvalRuleExcludedWithoutAll(t *testing.T) {
+	type req struct {
+		A string `validate:"excluded_without_all=B C"`
+		B string `validate:""`
+		C string `validate:""`
+	}
+	v := New()
+	if err := v.Struct(req{A: "", B: "b", C: "c"}); err != nil {
+		t.Fatalf("expected excluded_without_all to pass when A empty and B,C present: %v", err)
+	}
+}
+
+func TestEvalRuleEqCsField(t *testing.T) {
+	type inner struct {
+		Value int `validate:"eqcsfield=Value"`
+	}
+	type outer struct {
+		Value int   `validate:""`
+		Inner inner `validate:""`
+	}
+	v := New()
+	if err := v.Struct(outer{Value: 5, Inner: inner{Value: 5}}); err != nil {
+		t.Fatalf("expected eqcsfield to pass: %v", err)
+	}
+}
+
+func TestFieldContainsNonScalarOther(t *testing.T) {
+	type req struct {
+		Name  string `validate:"fieldcontains=Items"`
+		Items []int  `validate:""`
+	}
+	v := New()
+	if err := v.Struct(req{Name: "hello", Items: []int{1, 2}}); err == nil {
+		t.Fatal("expected fieldcontains to fail when other is non-scalar")
+	}
+}
+
+func TestValidateStructNonStructValue(t *testing.T) {
+	v := New()
+	if err := v.Struct(123); err == nil {
+		t.Fatal("expected Struct to fail for int")
+	}
+}
+
+func TestExcludedUnlessConditionNotMet(t *testing.T) {
+	type req struct {
+		Mode  string `validate:"required,oneof=on off"`
+		Debug string `validate:"excluded_unless=Mode on"`
+	}
+	v := New()
+	if err := v.Struct(req{Mode: "off", Debug: ""}); err != nil {
+		t.Fatalf("expected excluded_unless to pass when field empty and condition not met: %v", err)
+	}
+	if err := v.Struct(req{Mode: "off", Debug: "value"}); err == nil {
+		t.Fatal("expected excluded_unless to fail when field non-empty and condition not met")
+	}
+}
+
+func TestExcludedWithConditionMet(t *testing.T) {
+	type req struct {
+		B     string `validate:""`
+		Debug string `validate:"excluded_with=B"`
+	}
+	v := New()
+	if err := v.Struct(req{B: "present", Debug: ""}); err != nil {
+		t.Fatalf("expected excluded_with to pass when field empty: %v", err)
+	}
+	if err := v.Struct(req{B: "present", Debug: "value"}); err == nil {
+		t.Fatal("expected excluded_with to fail when field non-empty and B present")
+	}
+}
+
+func TestExcludedWithAllConditionMet(t *testing.T) {
+	type req struct {
+		B     string `validate:""`
+		C     string `validate:""`
+		Debug string `validate:"excluded_with_all=B C"`
+	}
+	v := New()
+	if err := v.Struct(req{B: "b", C: "c", Debug: ""}); err != nil {
+		t.Fatalf("expected excluded_with_all to pass when field empty: %v", err)
+	}
+	if err := v.Struct(req{B: "b", C: "c", Debug: "value"}); err == nil {
+		t.Fatal("expected excluded_with_all to fail when field non-empty and B,C present")
+	}
+}
+
+func TestExcludedWithoutConditionMet(t *testing.T) {
+	type req struct {
+		B     string `validate:""`
+		Debug string `validate:"excluded_without=B"`
+	}
+	v := New()
+	if err := v.Struct(req{B: "", Debug: ""}); err != nil {
+		t.Fatalf("expected excluded_without to pass when field empty: %v", err)
+	}
+	if err := v.Struct(req{B: "", Debug: "value"}); err == nil {
+		t.Fatal("expected excluded_without to fail when field non-empty and B absent")
+	}
+}
+
+func TestExcludedUnlessEmptyFieldConditionNotMet(t *testing.T) {
+	type req struct {
+		Mode  string `validate:"required,oneof=on off"`
+		Debug string `validate:"excluded_unless=Mode debug"`
+	}
+	v := New()
+	if err := v.Struct(req{Mode: "off", Debug: ""}); err != nil {
+		t.Fatalf("expected excluded_unless to pass when field empty and condition not met: %v", err)
+	}
+}
+
+func TestExcludedWithEmptyFieldConditionMet(t *testing.T) {
+	type req struct {
+		B     string `validate:""`
+		Debug string `validate:"excluded_with=B"`
+	}
+	v := New()
+	if err := v.Struct(req{B: "present", Debug: ""}); err != nil {
+		t.Fatalf("expected excluded_with to pass when field empty and B present: %v", err)
+	}
+}
+
+func TestExcludedWithAllEmptyFieldConditionMet(t *testing.T) {
+	type req struct {
+		B     string `validate:""`
+		C     string `validate:""`
+		Debug string `validate:"excluded_with_all=B C"`
+	}
+	v := New()
+	if err := v.Struct(req{B: "b", C: "c", Debug: ""}); err != nil {
+		t.Fatalf("expected excluded_with_all to pass when field empty and B,C present: %v", err)
+	}
+}
+
+func TestFieldContainsNonScalarOtherField(t *testing.T) {
+	type req struct {
+		Name  string `validate:"fieldcontains=Items"`
+		Items []int  `validate:""`
+	}
+	v := New()
+	if err := v.Struct(req{Name: "hello", Items: []int{1, 2}}); err == nil {
+		t.Fatal("expected fieldcontains to fail when other is non-scalar")
+	}
+}
+
+func TestExcludedUnlessConditionMetFieldNonEmpty(t *testing.T) {
+	type req struct {
+		Mode  string `validate:"required,oneof=on off debug"`
+		Debug string `validate:"excluded_unless=Mode debug"`
+	}
+	v := New()
+	if err := v.Struct(req{Mode: "debug", Debug: "yes"}); err != nil {
+		t.Fatalf("expected excluded_unless to pass when condition met and field non-empty: %v", err)
+	}
+}
+
+func TestExcludedWithConditionMetFieldNonEmpty(t *testing.T) {
+	type req struct {
+		B     string `validate:""`
+		Debug string `validate:"excluded_with=B"`
+	}
+	v := New()
+	if err := v.Struct(req{B: "present", Debug: "yes"}); err == nil {
+		t.Fatal("expected excluded_with to fail when B present and field non-empty")
+	}
+}
+
+func TestExcludedWithAllConditionMetFieldNonEmpty(t *testing.T) {
+	type req struct {
+		B     string `validate:""`
+		C     string `validate:""`
+		Debug string `validate:"excluded_with_all=B C"`
+	}
+	v := New()
+	if err := v.Struct(req{B: "b", C: "c", Debug: "yes"}); err == nil {
+		t.Fatal("expected excluded_with_all to fail when B,C present and field non-empty")
+	}
+}
+
+func TestVarStringReflectPathError(t *testing.T) {
+	v := New()
+	err := v.VarString("", "required_without=SomeField")
+	if err == nil {
+		t.Fatal("expected varStringReflectPath to return error for empty required_without")
+	}
+}
+
+func TestFieldContainsNonStringField(t *testing.T) {
+	type req struct {
+		Count int    `validate:"fieldcontains=Name"`
+		Name  string `validate:""`
+	}
+	v := New()
+	if err := v.Struct(req{Count: 1, Name: "hello"}); err == nil {
+		t.Fatal("expected fieldcontains to fail when field is non-string")
+	}
+}
+
+func TestExcludedWithBAbsent(t *testing.T) {
+	type req struct {
+		B     string `validate:""`
+		Debug string `validate:"excluded_with=B"`
+	}
+	v := New()
+	if err := v.Struct(req{B: "", Debug: "yes"}); err != nil {
+		t.Fatalf("expected excluded_with to pass when B is empty: %v", err)
+	}
+}
+
+func TestExcludedWithAllNotAllPresent(t *testing.T) {
+	type req struct {
+		B     string `validate:""`
+		C     string `validate:""`
+		Debug string `validate:"excluded_with_all=B C"`
+	}
+	v := New()
+	if err := v.Struct(req{B: "b", C: "", Debug: "yes"}); err != nil {
+		t.Fatalf("expected excluded_with_all to pass when not all present: %v", err)
+	}
+}
+
+func TestValidateStructNilPointer(t *testing.T) {
+	v := New()
+	var s *string
+	if err := v.Struct(s); err == nil {
+		t.Fatal("expected struct validation to fail for nil pointer")
+	}
+}
+
+func TestHTTPSURLNoColon(t *testing.T) {
+	v := New()
+	if err := v.Var("https-example.com", "https_url"); err == nil {
+		t.Fatal("expected https_url to fail for no colon")
+	}
+}
+
+func TestHTTPURLHostWithColon(t *testing.T) {
+	v := New()
+	if err := v.Var("http://user@example.com", "http_url"); err != nil {
+		t.Fatalf("expected http_url to pass for host with @: %v", err)
+	}
+}
+
+func TestHTTPURLHostWithPort(t *testing.T) {
+	v := New()
+	if err := v.Var("http://example.com:8080", "http_url"); err != nil {
+		t.Fatalf("expected http_url to pass for host with port: %v", err)
+	}
+}
+
+func TestRuleSemverPatchFail(t *testing.T) {
+	v := New()
+	if err := v.Var("1.2.", "semver"); err == nil {
+		t.Fatal("expected semver to fail for empty patch")
+	}
+}
+
+func TestRuleISBN10CheckDigitInvalid(t *testing.T) {
+	v := New()
+	if err := v.Var("080442957Y", "isbn10"); err == nil {
+		t.Fatal("expected isbn10 to fail for invalid check digit char")
+	}
+}
+
+func TestRuleISSNTooManyDigits(t *testing.T) {
+	v := New()
+	if err := v.Var("031784712", "issn"); err == nil {
+		t.Fatal("expected issn to fail for too many digits")
+	}
+}
+
+func TestRuleISSNCheckDigitNonDigitNonX(t *testing.T) {
+	v := New()
+	if err := v.Var("0317847A", "issn"); err == nil {
+		t.Fatal("expected issn to fail for non-digit non-X check digit")
+	}
+}
+
+func TestRuleBICBranchInvalidChar(t *testing.T) {
+	v := New()
+	if err := v.Var("CHASUS3!1", "bic"); err == nil {
+		t.Fatal("expected bic to fail for invalid branch code char")
+	}
+}
+
+func TestRuleDataURIMimeTypeNonASCII(t *testing.T) {
+	v := New()
+	if err := v.Var("data:text/pl\x00in;base64,SGVsbG8=", "datauri"); err == nil {
+		t.Fatal("expected datauri to fail for non-ASCII mime type")
+	}
+}
+
+func TestRuleBCP47InvalidPrimary(t *testing.T) {
+	v := New()
+	if err := v.Var("1n", "bcp47"); err == nil {
+		t.Fatal("expected bcp47 to fail for digit in primary subtag")
+	}
+}
+
+func TestRuleBCP47VariantTooLong(t *testing.T) {
+	v := New()
+	if err := v.Var("en-US-abcdefghi", "bcp47"); err == nil {
+		t.Fatal("expected bcp47 to fail for variant too long")
+	}
+}
+
+func TestRuleEthAddrNoPrefix(t *testing.T) {
+	v := New()
+	if err := v.Var("1x742d35Cc6634C0532925a3b844Bc9e7595f2bD38", "eth_addr"); err == nil {
+		t.Fatal("expected eth_addr to fail without 0x prefix")
+	}
+}
+
+func TestRuleBtcAddrLegacyTooShort(t *testing.T) {
+	v := New()
+	if err := v.Var("1A", "btc_addr"); err == nil {
+		t.Fatal("expected btc_addr to fail for too short legacy")
+	}
+}
+
+func TestRuleBtcAddrBech32InvalidPrefix(t *testing.T) {
+	v := New()
+	if err := v.Var("bc2qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4", "btc_addr"); err == nil {
+		t.Fatal("expected btc_addr to fail for invalid bech32 prefix")
+	}
+}
+
+func TestRuleBtcAddrBech32InvalidChar(t *testing.T) {
+	addr := "bc1q!508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4"
+	if len(addr) >= 26 && len(addr) <= 62 {
+		v := New()
+		if err := v.Var(addr, "btc_addr"); err == nil {
+			t.Fatal("expected btc_addr to fail for invalid bech32 char")
+		}
+	}
+}
+
+func TestTrimSpaceNoTrimNeeded(t *testing.T) {
+	v := New()
+	if err := v.Var("hello", "min=1"); err != nil {
+		t.Fatalf("expected min to pass for string without spaces: %v", err)
+	}
+}
+
+func TestCompareOpDefault(t *testing.T) {
+	v := New()
+	if err := v.Var(nil, "min=1"); err == nil {
+		t.Fatal("expected min to fail for nil")
+	}
+}
+
+func TestIPWithLeadingSpace(t *testing.T) {
+	v := New()
+	if err := v.Var(" 192.168.1.1", "ip"); err != nil {
+		t.Fatalf("expected ip to pass with leading space: %v", err)
+	}
+}
+
+func TestIPv4WithTrailingSpace(t *testing.T) {
+	v := New()
+	if err := v.Var("192.168.1.1 ", "ipv4"); err != nil {
+		t.Fatalf("expected ipv4 to pass with trailing space: %v", err)
+	}
+}
+
+func TestIPv6WithSpaces(t *testing.T) {
+	v := New()
+	if err := v.Var(" ::1 ", "ipv6"); err != nil {
+		t.Fatalf("expected ipv6 to pass with spaces: %v", err)
+	}
+}
+
+func TestRuleISBN13NonDigitChar(t *testing.T) {
+	type req struct {
+		ISBN string `validate:"isbn13"`
+	}
+	v := New()
+	if err := v.Struct(req{ISBN: "978-0-471-A1709-4"}); err == nil {
+		t.Fatal("expected isbn13 to fail for non-digit char")
+	}
+}
+
+func TestRuleISSNTooManyDigits2(t *testing.T) {
+	type req struct {
+		Code string `validate:"issn"`
+	}
+	v := New()
+	if err := v.Struct(req{Code: "0-317-8471-2"}); err == nil {
+		t.Fatal("expected issn to fail for too many digits")
+	}
+}
+
+func TestRuleBICBranchInvalidChar2(t *testing.T) {
+	type req struct {
+		Code string `validate:"bic"`
+	}
+	v := New()
+	if err := v.Struct(req{Code: "CHASUS3!"}); err == nil {
+		t.Fatal("expected bic to fail for invalid branch code char")
+	}
+}
+
+func TestRuleDataURIParamsNonASCII(t *testing.T) {
+	type req struct {
+		URI string `validate:"datauri"`
+	}
+	v := New()
+	if err := v.Struct(req{URI: "data:text/plain;chars\x00et=utf-8,hello"}); err == nil {
+		t.Fatal("expected datauri to fail for non-ASCII in params")
+	}
+}
+
+func TestRuleBCP47VariantNonAlphanum(t *testing.T) {
+	type req struct {
+		Tag string `validate:"bcp47"`
+	}
+	v := New()
+	if err := v.Struct(req{Tag: "en-US-variant!"}); err == nil {
+		t.Fatal("expected bcp47 to fail for non-alphanum in variant")
+	}
+}
+
+func TestRuleBtcAddrLegacyTooShort2(t *testing.T) {
+	type req struct {
+		Addr string `validate:"btc_addr"`
+	}
+	v := New()
+	if err := v.Struct(req{Addr: "1A"}); err == nil {
+		t.Fatal("expected btc_addr to fail for too short legacy address")
+	}
+}
+
+func TestEmptyRuleName(t *testing.T) {
+	type req struct {
+		Name string `validate:"=value"`
+	}
+	v := New()
+	if err := v.Struct(req{Name: "test"}); err != nil {
+		t.Fatalf("expected empty rule name to be skipped: %v", err)
+	}
+}
+
+func TestGetCustomValidationNil(t *testing.T) {
+	v := New()
+	// getCustomValidation 返回 nil 时 evalRule 返回 false，导致校验失败
+	if err := v.Var("test", "nonexistent_custom_rule"); err == nil {
+		t.Fatal("expected unknown custom rule to fail")
+	}
+}
+
+func TestCompareFieldDerefedViaEvalCmpField(t *testing.T) {
+	type req struct {
+		A string `validate:"eqfield=B"`
+		B string `validate:""`
+	}
+	v := New()
+	if err := v.Struct(req{A: "hello", B: "hello"}); err != nil {
+		t.Fatalf("expected eqfield to pass: %v", err)
+	}
+	if err := v.Struct(req{A: "hello", B: "world"}); err == nil {
+		t.Fatal("expected eqfield to fail for different values")
+	}
+}
+
+func TestCompareFieldDerefedViaEqCsField(t *testing.T) {
+	type inner struct {
+		Value string `validate:"eqcsfield=Value"`
+	}
+	type outer struct {
+		Value string `validate:""`
+		Inner inner  `validate:""`
+	}
+	v := New()
+	if err := v.Struct(outer{Value: "same", Inner: inner{Value: "same"}}); err != nil {
+		t.Fatalf("expected eqcsfield to pass: %v", err)
+	}
+}
+
+func TestApplyDiveWithIdxBuf(t *testing.T) {
+	type req struct {
+		Items []string `validate:"dive,min=1"`
+	}
+	v := New()
+	if err := v.Struct(req{Items: []string{"a", "b", "c"}}); err != nil {
+		t.Fatalf("expected dive to pass for valid items: %v", err)
+	}
+	if err := v.Struct(req{Items: []string{"a", "", "c"}}); err == nil {
+		t.Fatal("expected dive to fail for empty item")
+	}
+}
+
+func TestVarStringOrFastPath(t *testing.T) {
+	v := New()
+	if err := v.VarString("rgba(1,2,3,.5)", "rgb|rgba"); err != nil {
+		t.Fatalf("expected string or fast path to pass: %v", err)
+	}
+	if err := v.VarString("not-a-color", "rgb|rgba"); err == nil {
+		t.Fatal("expected string or fast path to fail")
+	}
+}
+
+func TestVarStringSingleRuleDirectFastPath(t *testing.T) {
+	v := New()
+	if err := v.Var("hello", "required"); err != nil {
+		t.Fatalf("expected required fast path to pass: %v", err)
+	}
+	if err := v.Var("", "required"); err == nil {
+		t.Fatal("expected required fast path to fail")
+	}
+	value := "hello world"
+	if err := v.Var(&value, "endswith=world"); err != nil {
+		t.Fatalf("expected pointer endswith fast path to pass: %v", err)
+	}
+	if err := v.Var("hello world", "endswith=argus"); err == nil {
+		t.Fatal("expected endswith fast path to fail")
+	}
+}
+
+func TestNoneOfCIFastPath(t *testing.T) {
+	type req struct {
+		Status string `validate:"noneofci=blocked denied"`
+	}
+	v := New()
+	if err := v.Struct(req{Status: "allowed"}); err != nil {
+		t.Fatalf("expected noneofci to pass: %v", err)
+	}
+	if err := v.Struct(req{Status: "BLOCKED"}); err == nil {
+		t.Fatal("expected noneofci to fail case-insensitively")
+	}
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// map dive 分配与正确性（原 zz_mapdive_probe_test.go，合并至此）
+//
+// 缺陷背景：iter.Key()/iter.Value() 每次调用都经 reflect.copyVal → unsafe_New
+// 新分配一份值存储，故 map dive 的分配量为 2N（N = 条目数）。改用可复用 holder
+// 配 SetIterKey/SetIterValue 后降为常量 1 次。
+//
+// 注意错误路径仍走 iter.Key()/Value()：newFieldError 会持有 reflect.Value，
+// 给它复用 holder 会被后续条目的 SetIter* 覆写——
+// TestProbeMapDive_ErrorReportsCorrectValue 即该风险的闸门。
+// ══════════════════════════════════════════════════════════════════════════════
+
+// mapOfSize 构造 n 条有效条目的 map
+func mapOfSize(n int) map[string]string {
+	m := make(map[string]string, n)
+	for i := 0; i < n; i++ {
+		k := fmt.Sprintf("k%03d", i)
+		m[k] = "v" + k
+	}
+	return m
+}
+
+// BenchmarkProbeMapDive_Scale 验证承载体复用的收益随条目数放大
+//
+// iter.Key()/Value() 的分配是 2×条目数；SetIterKey/SetIterValue 的分配是每次
+// dive 常数次，故条目越多差距越大。
+func BenchmarkProbeMapDive_Scale(b *testing.B) {
+	for _, n := range []int{3, 10, 100} {
+		m := mapOfSize(n)
+		v := New()
+		b.Run(fmt.Sprintf("entries=%d", n), func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_ = v.Var(m, "required,dive,required")
+			}
+		})
+	}
+}
+
+// BenchmarkProbeMapDive_WithKeyRules 带 keys 规则时需两个承载体
+func BenchmarkProbeMapDive_WithKeyRules(b *testing.B) {
+	m := mapOfSize(10)
+	v := New()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = v.Var(m, "required,dive,keys,required,endkeys,required")
+	}
+}
+
+// TestProbeMapDive_ErrorReportsCorrectValue 错误路径必须报告出错条目自身的值
+//
+// 这是承载体复用的关键风险点：newFieldError 持有传入的 reflect.Value，
+// 若把被复用的承载体交给它，后续条目的 SetIter* 会就地覆写，错误将报告
+// 错误的值。故错误路径必须取 iter 的独立副本。
+//
+// 构造：10 条中仅一条为空值（违反 required），断言错误里的值确为空而非
+// 后续条目覆写进来的非空值。
+func TestProbeMapDive_ErrorReportsCorrectValue(t *testing.T) {
+	m := mapOfSize(10)
+	m["k004"] = "" // 唯一违规条目
+
+	v := New()
+	err := v.Var(m, "required,dive,required")
+	if err == nil {
+		t.Fatal("期望校验失败，实得 nil")
+	}
+
+	errs, ok := err.(ValidationErrors)
+	if !ok {
+		t.Fatalf("期望 ValidationErrors，实得 %T", err)
+	}
+	if len(errs) != 1 {
+		t.Fatalf("期望恰好 1 条错误，实得 %d 条: %v", len(errs), err)
+	}
+
+	fe := errs[0]
+	// 命名空间须指向违规键
+	if !strings.Contains(fe.Namespace(), "k004") {
+		t.Errorf("错误命名空间未指向违规键 k004: %q", fe.Namespace())
+	}
+	// 值须为空字符串——若承载体被复用并覆写，这里会读到其他条目的非空值
+	if got := fe.Value(); got != "" {
+		t.Errorf("错误持有的值被后续条目覆写：期望空字符串，实得 %#v", got)
+	}
+}
+
+// TestProbeMapDive_AllEntriesValidated 复用承载体不得漏校验条目
+//
+// 若 SetIterValue 未正确推进，可能重复校验同一条目而漏掉其余。
+// 构造多条违规，断言每条都被报出。
+func TestProbeMapDive_AllEntriesValidated(t *testing.T) {
+	m := map[string]string{
+		"a": "", "b": "", "c": "ok", "d": "", "e": "ok",
+	}
+	v := New()
+	err := v.Var(m, "required,dive,required")
+	if err == nil {
+		t.Fatal("期望校验失败，实得 nil")
+	}
+	errs := err.(ValidationErrors)
+	if len(errs) != 3 {
+		t.Fatalf("期望 3 条错误（a/b/d），实得 %d 条: %v", len(errs), err)
+	}
+	seen := map[string]bool{}
+	for _, fe := range errs {
+		for _, k := range []string{"a", "b", "d"} {
+			if strings.Contains(fe.Namespace(), "["+k+"]") {
+				seen[k] = true
+			}
+		}
+	}
+	for _, k := range []string{"a", "b", "d"} {
+		if !seen[k] {
+			t.Errorf("违规条目 %q 未被报出", k)
+		}
+	}
+}
+
+// TestProbeMapDive_KeyRulesStillApplied 带 keys 规则时键校验仍生效
+func TestProbeMapDive_KeyRulesStillApplied(t *testing.T) {
+	m := map[string]string{"": "v1", "ok": "v2"}
+	v := New()
+	err := v.Var(m, "required,dive,keys,required,endkeys,required")
+	if err == nil {
+		t.Fatal("期望空键触发 keys 规则失败，实得 nil")
+	}
+}
+
+// TestProbeMapDive_StringMapFastPath map[string]string 零反射快路径的错误语义闸门
+//
+// applyDive 对 map[string]string 且键/值规则为「空或单条 required」的形态直接
+// range 具体类型，错误构造必须与通用路径逐字段对齐：键值同时违规按先键后值
+// 报两条；纯空白值与空串同为 required 违规；nil map 经快路径零迭代不报错。
+func TestProbeMapDive_StringMapFastPath(t *testing.T) {
+	v := New()
+
+	// 键值同时违规：同一条目报两条，先键（" "）后值（""）
+	err := v.Var(map[string]string{" ": ""}, "required,dive,keys,required,endkeys,required")
+	if err == nil {
+		t.Fatal("期望键值同时违规报错，实得 nil")
+	}
+	errs, ok := err.(ValidationErrors)
+	if !ok {
+		t.Fatalf("期望 ValidationErrors，实得 %T", err)
+	}
+	if len(errs) != 2 {
+		t.Fatalf("期望 2 条错误（键+值），实得 %d 条: %v", len(errs), err)
+	}
+	if got := errs[0].Value(); got != " " {
+		t.Errorf("第 1 条应为键错误（值 %q），实得 %q", " ", got)
+	}
+	if got := errs[1].Value(); got != "" {
+		t.Errorf("第 2 条应为值错误（空串），实得 %q", got)
+	}
+	if ns := errs[0].Namespace(); ns != "[ ]" {
+		t.Errorf("命名空间应为 %q，实得 %q", "[ ]", ns)
+	}
+
+	// 纯空白值与空串同为 required 违规
+	err = v.Var(map[string]string{"k": " \t "}, "required,dive,required")
+	if err == nil {
+		t.Fatal("纯空白值应触发 required 失败，实得 nil")
+	}
+	if fe := err.(ValidationErrors)[0]; fe.Value() != " \t " || !strings.Contains(fe.Namespace(), "[k]") {
+		t.Errorf("空白值错误不符：ns=%q value=%q", fe.Namespace(), fe.Value())
+	}
+
+	// 全部通过
+	if err := v.Var(map[string]string{"a": "1", "b": "2"}, "required,dive,required"); err != nil {
+		t.Fatalf("期望通过，实得 %v", err)
+	}
+
+	// nil map 裸 dive：零迭代、不报错、不 panic
+	if err := v.Var(map[string]string(nil), "dive,required"); err != nil {
+		t.Fatalf("nil map 裸 dive 应零迭代通过，实得 %v", err)
+	}
+}
+
+// ── 嵌套 dive：applyRulesFast 的 RuleDive map 分支 ──
+//
+// 首层 dive 由 applyDive 处理，其 slice/map 分支对每个元素调 applyRulesFast；
+// 当元素自身又是容器且剩余规则里还有 dive 时（如 []map[string]string 配
+// "dive,dive,required"），内层 dive 落入 applyRulesFast 的 RuleDive 分支。
+// 原实现 iter.Key()/iter.Value() 每条目 2 次 copyVal 分配，与该分支
+// 「校验全通过快路径不应有按条目数增长的分配」的定位相悖——
+// BenchmarkProbeNestedMapDive_Scale 验证修复后分配降为每次 dive 常数次。
+
+// BenchmarkProbeNestedMapDive_Scale 嵌套 map dive 的按条目分配随条目数放大
+func BenchmarkProbeNestedMapDive_Scale(b *testing.B) {
+	for _, n := range []int{3, 10, 100} {
+		ms := []map[string]string{mapOfSize(n)}
+		v := New()
+		b.Run(fmt.Sprintf("entries=%d", n), func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_ = v.Var(ms, "dive,dive,required")
+			}
+		})
+	}
+}
+
+// BenchmarkProbeNestedMapDive_MapOfMaps 外层带 keys 规则的 map-of-map 嵌套 dive
+//
+// 外层 map dive 走 applyDive 的承载体路径，内层 dive 落入 applyRulesFast：
+// 原实现内层每条目 2 次分配（此处 2 个外层键 × 10 条内层 = 40 次/op）。
+func BenchmarkProbeNestedMapDive_MapOfMaps(b *testing.B) {
+	inner := mapOfSize(10)
+	m := map[string]map[string]string{"outer1": inner, "outer2": inner}
+	v := New()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = v.Var(m, "dive,keys,required,endkeys,dive,required")
+	}
+}
+
+// TestProbeNestedMapDive_AllEntriesValidated 嵌套承载体不得漏校验条目
+//
+// 构造两个内层 map 共 3 条违规（跨 map、跨条目），断言每条都被报出且值正确。
+// map 条目无序，故按命名空间集合断言而非顺序。
+func TestProbeNestedMapDive_AllEntriesValidated(t *testing.T) {
+	m1 := map[string]string{"a": "", "b": "ok", "c": ""}
+	m2 := map[string]string{"d": "ok", "e": ""}
+	v := New()
+	err := v.Var([]map[string]string{m1, m2}, "dive,dive,required")
+	if err == nil {
+		t.Fatal("期望校验失败，实得 nil")
+	}
+	errs, ok := err.(ValidationErrors)
+	if !ok {
+		t.Fatalf("期望 ValidationErrors，实得 %T", err)
+	}
+	if len(errs) != 3 {
+		t.Fatalf("期望 3 条错误（a/c/e），实得 %d 条: %v", len(errs), err)
+	}
+	seen := map[string]bool{}
+	for _, fe := range errs {
+		seen[fe.Namespace()] = true
+		if fe.Value() != "" {
+			t.Errorf("错误 %q 持有的值应为空串，实得 %#v", fe.Namespace(), fe.Value())
+		}
+	}
+	for _, ns := range []string{"[0][a]", "[0][c]", "[1][e]"} {
+		if !seen[ns] {
+			t.Errorf("违规条目 %q 未被报出，实得 %v", ns, seen)
+		}
+	}
+}
+
+// TestProbeNestedMapDive_WithKeyRules 外层 keys 规则 + 内层 dive 的组合
+//
+// 外层空键违反 required、内层值违反 required 各报一条；条目无序按集合断言。
+func TestProbeNestedMapDive_WithKeyRules(t *testing.T) {
+	m := map[string]map[string]string{
+		"ok":  {"inner1": "v1"},
+		"":    {"inner2": "v2"}, // 外层键违反 required
+		"bad": {"inner3": ""},   // 内层值违反 required
+	}
+	v := New()
+	err := v.Var(m, "dive,keys,required,endkeys,dive,required")
+	if err == nil {
+		t.Fatal("期望校验失败，实得 nil")
+	}
+	errs, ok := err.(ValidationErrors)
+	if !ok {
+		t.Fatalf("期望 ValidationErrors，实得 %T", err)
+	}
+	if len(errs) != 2 {
+		t.Fatalf("期望 2 条错误（外层空键 + inner3），实得 %d 条: %v", len(errs), err)
+	}
+	seen := map[string]bool{}
+	for _, fe := range errs {
+		seen[fe.Namespace()] = true
+		if fe.Value() != "" {
+			t.Errorf("错误 %q 持有的值应为空串，实得 %#v", fe.Namespace(), fe.Value())
+		}
+	}
+	for _, ns := range []string{"[]", "[bad][inner3]"} {
+		if !seen[ns] {
+			t.Errorf("期望错误命名空间 %q 未被报出，实得 %v", ns, seen)
+		}
+	}
+}
+
+// TestProbeNestedMapDive_StringMapFastPath 嵌套 dive 的 map[string]string 快路径
+//
+// 内层 keys 规则分支（len(keyRules)>0）与 nil 内层 map 的零迭代行为：
+// 快路径只产出 bool，错误由调用方慢路径重建——断言错误值与命名空间仍逐字段对齐。
+func TestProbeNestedMapDive_StringMapFastPath(t *testing.T) {
+	v := New()
+
+	// 内层键值同时违规：先键（" "）后值（""）各报一条
+	err := v.Var([]map[string]string{{" ": ""}}, "dive,dive,keys,required,endkeys,required")
+	if err == nil {
+		t.Fatal("期望键值同时违规报错，实得 nil")
+	}
+	errs, ok := err.(ValidationErrors)
+	if !ok {
+		t.Fatalf("期望 ValidationErrors，实得 %T", err)
+	}
+	if len(errs) != 2 {
+		t.Fatalf("期望 2 条错误（键+值），实得 %d 条: %v", len(errs), err)
+	}
+	if got := errs[0].Value(); got != " " {
+		t.Errorf("第 1 条应为键错误（值 %q），实得 %q", " ", got)
+	}
+	if got := errs[1].Value(); got != "" {
+		t.Errorf("第 2 条应为值错误（空串），实得 %q", got)
+	}
+	if ns := errs[0].Namespace(); ns != "[0][ ]" {
+		t.Errorf("命名空间应为 %q，实得 %q", "[0][ ]", ns)
+	}
+
+	// nil 内层 map：快路径零迭代通过，不 panic
+	if err := v.Var([]map[string]string{nil}, "dive,dive,required"); err != nil {
+		t.Fatalf("nil 内层 map 应零迭代通过，实得 %v", err)
+	}
+}
+
+// ── 两种 reflect map 迭代 API 的隔离对比 ──
+//
+// 证明承载体复用的收益来源：iter.Key()/Value() 每次调用经 reflect.copyVal
+// → reflect.unsafe_New 分配新值存储；SetIterKey/SetIterValue 就地写入。
+
+func benchIterCopyVal(b *testing.B, n int) {
+	m := mapOfSize(n)
+	rv := reflect.ValueOf(m)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		iter := rv.MapRange()
+		for iter.Next() {
+			k, v := iter.Key(), iter.Value()
+			_, _ = k.String(), v.String()
+		}
+	}
+}
+
+func benchIterSetIter(b *testing.B, n int) {
+	m := mapOfSize(n)
+	rv := reflect.ValueOf(m)
+	kh := reflect.New(rv.Type().Key()).Elem()
+	vh := reflect.New(rv.Type().Elem()).Elem()
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		iter := rv.MapRange()
+		for iter.Next() {
+			kh.SetIterKey(iter)
+			vh.SetIterValue(iter)
+			_, _ = kh.String(), vh.String()
+		}
+	}
+}
+
+func BenchmarkProbeIterAPI_CopyVal_3(b *testing.B)   { benchIterCopyVal(b, 3) }
+func BenchmarkProbeIterAPI_SetIter_3(b *testing.B)   { benchIterSetIter(b, 3) }
+func BenchmarkProbeIterAPI_CopyVal_100(b *testing.B) { benchIterCopyVal(b, 100) }
+func BenchmarkProbeIterAPI_SetIter_100(b *testing.B) { benchIterSetIter(b, 100) }

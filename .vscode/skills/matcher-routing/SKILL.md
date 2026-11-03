@@ -10,7 +10,7 @@ description: 路由匹配工具，提供基于 contextx.Context 的规则匹配�
 ## 快速开始
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/matcher"
+import "github.com/HitGameAI/apex-toolbox/pkg/matcher"
 ```
 
 规则匹配（基于 contextx.Context）：

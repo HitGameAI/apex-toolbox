@@ -8,20 +8,20 @@
 
 <br>
 
-[![稳定版本](https://img.shields.io/badge/版本-稳定-green.svg)](https://github.com/kamalyes/go-toolbox)
-[![许可协议](https://img.shields.io/github/license/kamalyes/go-toolbox)](LICENSE)
-[![下载次数](https://img.shields.io/github/downloads/kamalyes/go-toolbox/total)](https://github.com/kamalyes/go-toolbox/releases)
-[![最新版本](https://img.shields.io/github/v/release/kamalyes/go-toolbox)](https://github.com/kamalyes/go-toolbox/releases)
-[![提交记录](https://img.shields.io/github/last-commit/kamalyes/go-toolbox)](https://github.com/kamalyes/go-toolbox/commits/master)
+[![稳定版本](https://img.shields.io/badge/版本-稳定-green.svg)](https://github.com/HitGameAI/apex-toolbox)
+[![许可协议](https://img.shields.io/github/license/HitGameAI/apex-toolbox)](LICENSE)
+[![下载次数](https://img.shields.io/github/downloads/HitGameAI/apex-toolbox/total)](https://github.com/HitGameAI/apex-toolbox/releases)
+[![最新版本](https://img.shields.io/github/v/release/HitGameAI/apex-toolbox)](https://github.com/HitGameAI/apex-toolbox/releases)
+[![提交记录](https://img.shields.io/github/last-commit/HitGameAI/apex-toolbox)](https://github.com/HitGameAI/apex-toolbox/commits/master)
 
-[![代码覆盖率](https://codecov.io/gh/kamalyes/go-toolbox/branch/master/graph/badge.svg)](https://codecov.io/gh/kamalyes/go-toolbox)
-[![Go 报告卡](https://goreportcard.com/badge/github.com/kamalyes/go-toolbox)](https://goreportcard.com/report/github.com/kamalyes/go-toolbox)
-[![Go 版本](https://img.shields.io/github/go-mod/go-version/kamalyes/go-toolbox)](https://golang.org/)
-[![文档](https://pkg.go.dev/badge/github.com/kamalyes/go-toolbox.svg)](https://pkg.go.dev/github.com/kamalyes/go-toolbox)
+[![代码覆盖率](https://codecov.io/gh/HitGameAI/apex-toolbox/branch/master/graph/badge.svg)](https://codecov.io/gh/HitGameAI/apex-toolbox)
+[![Go 报告卡](https://goreportcard.com/badge/github.com/HitGameAI/apex-toolbox)](https://goreportcard.com/report/github.com/HitGameAI/apex-toolbox)
+[![Go 版本](https://img.shields.io/github/go-mod/go-version/HitGameAI/apex-toolbox)](https://golang.org/)
+[![文档](https://pkg.go.dev/badge/github.com/HitGameAI/apex-toolbox.svg)](https://pkg.go.dev/github.com/HitGameAI/apex-toolbox)
 
 <br>
 
-*[API 文档](https://pkg.go.dev/github.com/kamalyes/go-toolbox)*
+*[API 文档](https://pkg.go.dev/github.com/HitGameAI/apex-toolbox)*
 </div>
 
 ---
@@ -133,7 +133,7 @@ graph TB
 ### 安装
 
 ```bash
-go get -u github.com/kamalyes/go-toolbox
+go get -u github.com/HitGameAI/apex-toolbox
 ```
 
 ### 基础用法
@@ -143,9 +143,9 @@ package main
 
 import (
     "fmt"
-    "github.com/kamalyes/go-toolbox/pkg/convert"
-    "github.com/kamalyes/go-toolbox/pkg/stringx"
-    "github.com/kamalyes/go-toolbox/pkg/moment"
+    "github.com/HitGameAI/apex-toolbox/pkg/convert"
+    "github.com/HitGameAI/apex-toolbox/pkg/stringx"
+    "github.com/HitGameAI/apex-toolbox/pkg/moment"
 )
 
 func main() {
@@ -174,7 +174,7 @@ func main() {
 #### 🎭 数据脱敏
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/desensitize"
+import "github.com/HitGameAI/apex-toolbox/pkg/desensitize"
 
 // 手机号脱敏
 phone := desensitize.Phone("13812345678")  // 138****5678
@@ -189,7 +189,7 @@ idcard := desensitize.IDCard("110101199001011234")  // 110101****1234
 #### 🛡 熔断器（Breaker）
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/breaker"
+import "github.com/HitGameAI/apex-toolbox/pkg/breaker"
 
 // 创建熔断器
 cb := breaker.NewCircuitBreaker(breaker.Config{
@@ -211,7 +211,7 @@ if err != nil {
 #### 🔁 智能重试
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/retry"
+import "github.com/HitGameAI/apex-toolbox/pkg/retry"
 
 err := retry.NewRetry().
     SetAttemptCount(3).
@@ -226,7 +226,7 @@ err := retry.NewRetry().
 #### 🔢 数学计算与三元运算
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/mathx"
+import "github.com/HitGameAI/apex-toolbox/pkg/mathx"
 
 // 统计计算
 data := []float64{1, 2, 3, 4, 5}
@@ -253,7 +253,7 @@ s := mathx.Decimals(12345, 2)       // "123.45"
 #### 🔀 并发原语（syncx）
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/syncx"
+import "github.com/HitGameAI/apex-toolbox/pkg/syncx"
 
 // 高并发分片映射表（替代 sync.Map，写性能更好）
 m := syncx.NewShardedMap[string, int](64) // 64 个分片
@@ -281,7 +281,7 @@ delayer.WaitForCompletion()
 #### ⚡ 高性能 ID 生成器
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/idgen"
+import "github.com/HitGameAI/apex-toolbox/pkg/idgen"
 
 // 创建生成器（5种算法可选）
 gen := idgen.NewIDGenerator("uuid")  // uuid, nanoid, snowflake, ulid, default
@@ -305,7 +305,7 @@ defaultGen := idgen.NewDefaultIDGenerator() // Default Hex
 #### ⏱️ Cron 表达式解析器
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/cron"
+import "github.com/HitGameAI/apex-toolbox/pkg/cron"
 
 // 解析标准 Cron 表达式（5 字段）
 schedule, _ := cron.ParseCronStandard("0 9 * * MON-FRI")
@@ -357,14 +357,14 @@ go test -v 2>&1 | Select-String -Pattern "FAIL"
 
 ### 问题反馈
 
-- 🐛 [提交 Bug](https://github.com/kamalyes/go-toolbox/issues/new?template=bug_report.md)
-- 💡 [功能建议](https://github.com/kamalyes/go-toolbox/issues/new?template=feature_request.md)
-- 💬 [讨论交流](https://github.com/kamalyes/go-toolbox/discussions)
+- 🐛 [提交 Bug](https://github.com/HitGameAI/apex-toolbox/issues/new?template=bug_report.md)
+- 💡 [功能建议](https://github.com/HitGameAI/apex-toolbox/issues/new?template=feature_request.md)
+- 💬 [讨论交流](https://github.com/HitGameAI/apex-toolbox/discussions)
 
 ### 社区支持
 
-- 📚 [Wiki 文档](https://github.com/kamalyes/go-toolbox/wiki)
-- 🎥 [视频教程](https://github.com/kamalyes/go-toolbox/wiki/tutorials)
+- 📚 [Wiki 文档](https://github.com/HitGameAI/apex-toolbox/wiki)
+- 🎥 [视频教程](https://github.com/HitGameAI/apex-toolbox/wiki/tutorials)
 
 ## 📄 许可协议
 
@@ -372,7 +372,7 @@ go test -v 2>&1 | Select-String -Pattern "FAIL"
 
 ## 🙏 致谢
 
-感谢所有 [贡献者](https://github.com/kamalyes/go-toolbox/graphs/contributors) 的辛勤付出！
+感谢所有 [贡献者](https://github.com/HitGameAI/apex-toolbox/graphs/contributors) 的辛勤付出！
 
 ---
 

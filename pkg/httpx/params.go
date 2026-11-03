@@ -13,9 +13,9 @@ package httpx
 import (
 	"reflect"
 
-	"github.com/kamalyes/go-toolbox/pkg/convert"
-	"github.com/kamalyes/go-toolbox/pkg/mathx"
-	"github.com/kamalyes/go-argus"
+	validator "github.com/HitGameAI/apex-toolbox/pkg/argus"
+	"github.com/HitGameAI/apex-toolbox/pkg/convert"
+	"github.com/HitGameAI/apex-toolbox/pkg/mathx"
 )
 
 // ParamsBuilder 参数构建器，支持链式调用

@@ -10,7 +10,7 @@ description: 元数据提取工具，提供HTTP请求元数据提取、语言检
 ## 快速开始
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/metadata"
+import "github.com/HitGameAI/apex-toolbox/pkg/metadata"
 ```
 
 提取请求元数据：

@@ -229,7 +229,7 @@ if val < 1000 {
 ### 1. 复用缓冲区
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/stringx"
+import "github.com/HitGameAI/apex-toolbox/pkg/stringx"
 
 // ✅ 推荐：复用缓冲区
 buf := make([]byte, 0, 128)
@@ -277,7 +277,7 @@ writer.Write(buf)
 可直接使用 `convert.AppendValue` 将任意值零拷贝追加到缓冲区：
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/convert"
+import "github.com/HitGameAI/apex-toolbox/pkg/convert"
 
 buf := make([]byte, 0, 128)
 buf = convert.AppendValue(buf, 123)   // 内部调用 stringx.FastAppendInt

@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kamalyes/go-toolbox/pkg/syncx"
+	"github.com/HitGameAI/apex-toolbox/pkg/syncx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

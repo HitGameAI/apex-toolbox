@@ -11,8 +11,8 @@ description: 重试与熔断工具，提供可配置的重试策略（退避、�
 
 ```go
 import (
-    "github.com/kamalyes/go-toolbox/pkg/retry"
-    "github.com/kamalyes/go-toolbox/pkg/breaker"
+    "github.com/HitGameAI/apex-toolbox/pkg/retry"
+    "github.com/HitGameAI/apex-toolbox/pkg/breaker"
 )
 ```
 

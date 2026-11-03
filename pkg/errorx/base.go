@@ -15,7 +15,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/kamalyes/go-toolbox/pkg/syncx"
+	"github.com/HitGameAI/apex-toolbox/pkg/syncx"
 )
 
 // WrapError 是一个通用的错误包装函数

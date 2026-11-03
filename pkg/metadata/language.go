@@ -14,7 +14,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/kamalyes/go-toolbox/pkg/mathx"
+	"github.com/HitGameAI/apex-toolbox/pkg/mathx"
 )
 
 // LanguageExtractor 语言提取器配置

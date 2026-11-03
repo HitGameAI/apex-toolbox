@@ -18,7 +18,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/kamalyes/go-toolbox/pkg/errorx"
+	"github.com/HitGameAI/apex-toolbox/pkg/errorx"
 )
 
 // Response 结构体用于封装 HTTP 响应

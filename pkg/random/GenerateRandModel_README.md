@@ -14,7 +14,7 @@
 ## 📦 安装
 
 ```bash
-go get github.com/kamalyes/go-toolbox/pkg/random
+go get github.com/HitGameAI/apex-toolbox/pkg/random
 ```
 
 ## 🚀 快速开始
@@ -28,7 +28,7 @@ import (
     "fmt"
     "log"
     "time"
-    "github.com/kamalyes/go-toolbox/pkg/random"
+    "github.com/HitGameAI/apex-toolbox/pkg/random"
 )
 
 type User struct {
@@ -291,7 +291,7 @@ import (
     "fmt"
     "log"
     "time"
-    "github.com/kamalyes/go-toolbox/pkg/random"
+    "github.com/HitGameAI/apex-toolbox/pkg/random"
 )
 
 type Address struct {

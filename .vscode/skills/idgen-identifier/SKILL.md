@@ -10,7 +10,7 @@ description: ID生成器，提供多种唯一ID生成策略（默认Hex/UUID/Nan
 ## 快速开始
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/idgen"
+import "github.com/HitGameAI/apex-toolbox/pkg/idgen"
 ```
 
 创建默认生成器并生成各语义 ID：

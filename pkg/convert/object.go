@@ -16,7 +16,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/kamalyes/go-toolbox/pkg/stringx"
+	"github.com/HitGameAI/apex-toolbox/pkg/stringx"
 )
 
 // ParseObjectToMap 解析对象为 key-value map

@@ -15,7 +15,7 @@ import (
 	"math/bits"
 	"sync"
 
-	"github.com/kamalyes/go-toolbox/pkg/syncx"
+	"github.com/HitGameAI/apex-toolbox/pkg/syncx"
 )
 
 // Config 表示CRC算法的配置结构体

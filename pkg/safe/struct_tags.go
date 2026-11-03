@@ -14,8 +14,8 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/kamalyes/go-toolbox/pkg/stringx"
-	"github.com/kamalyes/go-toolbox/pkg/types"
+	"github.com/HitGameAI/apex-toolbox/pkg/stringx"
+	"github.com/HitGameAI/apex-toolbox/pkg/types"
 )
 
 // ExtractStructuredTagValue 从分号分隔的结构化标签中提取值

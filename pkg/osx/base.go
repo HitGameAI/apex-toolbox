@@ -23,9 +23,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/kamalyes/go-toolbox/pkg/mathx"
-	"github.com/kamalyes/go-toolbox/pkg/random"
-	"github.com/kamalyes/go-toolbox/pkg/stringx"
+	"github.com/HitGameAI/apex-toolbox/pkg/mathx"
+	"github.com/HitGameAI/apex-toolbox/pkg/random"
+	"github.com/HitGameAI/apex-toolbox/pkg/stringx"
 )
 
 // WorkerIDConfig WorkerID 配置

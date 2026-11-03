@@ -29,7 +29,7 @@ if config != nil {
 ### 通用安全访问 - Safe()
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/safe"
+import "github.com/HitGameAI/apex-toolbox/pkg/safe"
 
 // ✅ 安全的链式访问
 enabled := safe.Safe(config).
@@ -190,7 +190,7 @@ if configSafe.BoolAt("Health.MySQL.Enabled", false) {
 `safe` 包内置了 `NilPanicDetector`，可扫描 Go 源码中潜在的 nil panic 风险：
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/safe"
+import "github.com/HitGameAI/apex-toolbox/pkg/safe"
 
 detector := safe.NewNilPanicDetector()
 
@@ -242,7 +242,7 @@ for _, s := range detector.GetFixSuggestions() {
 1. 在你的项目中导入：
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/safe"
+import "github.com/HitGameAI/apex-toolbox/pkg/safe"
 ```
 
 2. 替换危险的嵌套访问：

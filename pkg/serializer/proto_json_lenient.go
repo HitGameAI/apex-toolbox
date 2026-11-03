@@ -22,7 +22,7 @@ import (
 	"bytes"
 	"strings"
 
-	validator "github.com/kamalyes/go-argus"
+	validator "github.com/HitGameAI/apex-toolbox/pkg/argus"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )

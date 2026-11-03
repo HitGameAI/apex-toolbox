@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kamalyes/go-toolbox/pkg/types"
+	"github.com/HitGameAI/apex-toolbox/pkg/types"
 	"github.com/stretchr/testify/assert"
 )
 

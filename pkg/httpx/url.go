@@ -11,7 +11,7 @@
 package httpx
 
 import (
-	"github.com/kamalyes/go-toolbox/pkg/stringx"
+	"github.com/HitGameAI/apex-toolbox/pkg/stringx"
 )
 
 // NormalizeBaseURL 规范化基础 URL，确保包含协议前缀

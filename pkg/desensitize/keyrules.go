@@ -6,11 +6,11 @@
  * @FilePath: \go-toolbox\pkg\desensitize\keyrules.go
  * @Description: 按字段名判定脱敏动作（零分配）
  *
- * 本文件自 go-logger 的 sanitize.go 迁入，是其中不依赖 Logger 的纯逻辑部分：
+ * 本文件自 go-toolbox/pkg/logger 的 sanitize.go 迁入，是其中不依赖 Logger 的纯逻辑部分：
  * 规则表、两级索引与掩码追加器
  * 迁过来的理由是这 200 余条规则属于安全基线，维护两份迟早漂移，
- * 而 DataMasker、go-sqlbuilder、HTTP 响应体脱敏同样需要它们
- * go-logger 保留 Logger 侧的接入胶水，判定与规则改为引用本库
+ * 而 DataMasker、go-toolbox/pkg/sqlbuilder、HTTP 响应体脱敏同样需要它们
+ * go-toolbox/pkg/logger 保留 Logger 侧的接入胶水，判定与规则改为引用本库
  *
  * 一张表、两档强度，解决「日志和报文取舍方向相反」的问题：
  *   - ActionForKey（严格：精确 + 后缀 + 运维豁免）给日志字段名用
@@ -19,7 +19,7 @@
  *     漏擦等于把凭据写进响应，宁可误擦
  * 而结构体 Model 两档都不用，只认 desensitize tag，理由见 doc.go
  *
- * [EN] Migrated from go-logger's sanitize.go: the parts not depending on Logger
+ * [EN] Migrated from go-toolbox/pkg/logger's sanitize.go: the parts not depending on Logger
  * (rule tables, the two-level index, the mask appenders). These 200-odd rules
  * are a security baseline that would drift if kept twice. One table serves two
  * strengths because logs and bodies trade off in opposite directions, while

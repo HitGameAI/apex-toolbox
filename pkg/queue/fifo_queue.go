@@ -15,7 +15,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/kamalyes/go-toolbox/pkg/syncx"
+	"github.com/HitGameAI/apex-toolbox/pkg/syncx"
 )
 
 // FIFOQueue 实现了先进先出（FIFO）的队列

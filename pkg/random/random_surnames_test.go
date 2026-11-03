@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kamalyes/go-toolbox/pkg/mathx"
+	"github.com/HitGameAI/apex-toolbox/pkg/mathx"
 	"github.com/stretchr/testify/assert"
 )
 

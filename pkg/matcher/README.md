@@ -26,8 +26,8 @@
 import (
     "fmt"
 
-    "github.com/kamalyes/go-toolbox/pkg/contextx"
-    "github.com/kamalyes/go-toolbox/pkg/matcher"
+    "github.com/HitGameAI/apex-toolbox/pkg/contextx"
+    "github.com/HitGameAI/apex-toolbox/pkg/matcher"
 )
 
 // 定义结果类型
@@ -113,7 +113,7 @@ m.AddRule(
 
 ### Context 上下文
 
-匹配器使用的上下文类型为 `*contextx.Context`（来自 `github.com/kamalyes/go-toolbox/pkg/contextx`）
+匹配器使用的上下文类型为 `*contextx.Context`（来自 `github.com/HitGameAI/apex-toolbox/pkg/contextx`）
 
 ```go
 ctx := contextx.NewContext()                  // 创建上下文

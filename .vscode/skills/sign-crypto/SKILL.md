@@ -10,7 +10,7 @@ description: 加密签名工具，提供RSA密钥对生成/导入、HMAC签名�
 ## 快速开始
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/sign"
+import "github.com/HitGameAI/apex-toolbox/pkg/sign"
 ```
 
 RSA密钥对：

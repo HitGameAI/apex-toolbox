@@ -10,7 +10,7 @@ description: 数据单位格式化工具，提供十进制/二进制单位转换
 ## 快速开始
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/units"
+import "github.com/HitGameAI/apex-toolbox/pkg/units"
 ```
 
 格式化：

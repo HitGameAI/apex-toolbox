@@ -12,7 +12,7 @@ description: 类型与反射工具，提供 proto.Message 类型判断、JSON/go
 ## 快速开始
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/types"
+import "github.com/HitGameAI/apex-toolbox/pkg/types"
 ```
 
 JSON 字段解析：

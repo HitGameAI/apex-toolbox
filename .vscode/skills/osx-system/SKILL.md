@@ -10,7 +10,7 @@ description: 系统工具包，提供OS检测、文件操作、哈希计算、�
 ## 快速开始
 
 ```go
-import "github.com/kamalyes/go-toolbox/pkg/osx"
+import "github.com/HitGameAI/apex-toolbox/pkg/osx"
 ```
 
 OS检测：

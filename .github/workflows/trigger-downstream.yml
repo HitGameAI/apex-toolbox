@@ -70,7 +70,7 @@ jobs:
     strategy:
       matrix:
         repo:
-          - kamalyes/go-pbmo
+          - HitGameAI/apex-pbmo
     steps:
       - name: Dispatch to ${{ matrix.repo }}
         if: github.event_name == 'push' || matrix.repo == format('kamalyes/{0}', inputs.target_repo)
@@ -80,4 +80,4 @@ jobs:
           repository: ${{ matrix.repo }}
           event-type: upstream-updated
           client-payload: >-
-            {"module":"github.com/kamalyes/go-toolbox","version":"${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}","sha":"${{ github.sha }}","create_tag":${{ github.event_name == 'workflow_dispatch' && inputs.create_tag || false }},"commit_message":"📦 deps: 同步上游依赖 ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}\n\n- 📦 更新 github.com/kamalyes/go-toolbox 到 ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }} (go.mod, go.sum)\n- 🔄 自动联动下游版本标签 (bump-upstream.yml)\n\nsync upstream ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}"}
+            {"module":"github.com/HitGameAI/apex-toolbox","version":"${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}","sha":"${{ github.sha }}","create_tag":${{ github.event_name == 'workflow_dispatch' && inputs.create_tag || false }},"commit_message":"📦 deps: 同步上游依赖 ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}\n\n- 📦 更新 github.com/HitGameAI/apex-toolbox 到 ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }} (go.mod, go.sum)\n- 🔄 自动联动下游版本标签 (bump-upstream.yml)\n\nsync upstream ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}"}

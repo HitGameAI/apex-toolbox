@@ -20,7 +20,7 @@ import (
 
 	"encoding/json"
 
-	"github.com/kamalyes/go-toolbox/pkg/convert"
+	"github.com/HitGameAI/apex-toolbox/pkg/convert"
 )
 
 // RandGeneratorFunc 自定义随机数据生成器函数类型

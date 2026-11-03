@@ -15,7 +15,7 @@ import (
 	"regexp"
 	"strings"
 
-	validator "github.com/kamalyes/go-argus"
+	validator "github.com/HitGameAI/apex-toolbox/pkg/argus"
 )
 
 // Trim 除去字符串头尾部的空白
@@ -35,7 +35,7 @@ func (s *StringX) TrimChain() *StringX {
 }
 
 // IsBlankChain 判断字符串去除首尾空白后是否为空（链式调用）
-// 已迁移至 go-argus：validate.IsBlankString
+// 已迁移至 go-toolbox/pkg/argus：validate.IsBlankString
 func (s *StringX) IsBlankChain() bool {
 	return Trim(s.value) == ""
 }
