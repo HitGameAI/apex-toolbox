@@ -1,6 +1,6 @@
 module github.com/HitGameAI/apex-toolbox
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/alicebob/miniredis/v2 v2.40.0
@@ -16,7 +16,7 @@ require (
 	github.com/minio/minio-go/v7 v7.0.100
 	github.com/nats-io/nats-server/v2 v2.11.0
 	github.com/nats-io/nats.go v1.39.1
-	github.com/redis/go-redis/v9 v9.21.0
+	github.com/redis/go-redis/v9 v9.23.0
 	github.com/stretchr/testify v1.12.1
 	go.opentelemetry.io/otel/trace v1.44.0
 	golang.org/x/crypto v0.47.0
@@ -66,7 +66,7 @@ require (
 	golang.org/x/arch v0.8.0 // indirect
 	golang.org/x/image v0.23.0 // indirect
 	golang.org/x/net v0.48.0 // indirect
-	golang.org/x/sys v0.45.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
 	golang.org/x/time v0.11.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
