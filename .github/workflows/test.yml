@@ -1,9 +1,9 @@
 name: Test
 
-# 实际流程全在 kamalyes/deploy-pipeline 的 go-library-test.yml 里，所有 Go 库共用一份
+# 实际流程全在 HitGameAI/deploy-pipeline 的 go-library-test.yml 里，所有 Go 库共用一份
 # 改那一份就等于改所有库；本文件只保留触发器与平台选择，Go 版本矩阵由流水线按 go.mod 推导
 #
-# [EN] The pipeline lives in go-library-test.yml in kamalyes/deploy-pipeline; this file only
+# [EN] The pipeline lives in go-library-test.yml in HitGameAI/deploy-pipeline; this file only
 # keeps the triggers and the platform choice, and the Go version matrix is derived there
 
 on:
@@ -23,7 +23,7 @@ on:
 
 jobs:
   test:
-    uses: kamalyes/deploy-pipeline/.github/workflows/go-library-test.yml@master
+    uses: HitGameAI/deploy-pipeline/.github/workflows/go-library-test.yml@013c0e1efc2b97819ca13f44fe5432be79f58867
     with:
       # 平台按原仓库既有选择保留；要加回 windows/macos 直接改这一行
       # [EN] The platform set follows the repository's original choice
