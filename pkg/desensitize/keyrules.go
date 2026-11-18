@@ -77,7 +77,7 @@ var exactKeyRules = buildKeyRules(map[KeyAction][]string{
 		"merchant_key", "system_key", "sys_key", "sign_key", "pay_key", "mch_key",
 		"channel_key", "callback_key", "aes_key", "hmac_key",
 		"merchant_secret", "system_secret", "mch_secret",
-		"private_params", "firebase_detail_json",
+		"private_params", "credential_params", "firebase_detail_json",
 		"credential", "credentials",
 		"signature", "sign", "sign_str",
 		"session", "session_id", "sessid", "jsessionid", "phpsessid",
@@ -93,7 +93,7 @@ var exactKeyRules = buildKeyRules(map[KeyAction][]string{
 
 		// ---- 支付与金融（电商）----
 		"card_number", "card_no", "cardno", "pan",
-		"credit_card", "creditcard", "debit_card", "bank_card",
+		"credit_card", "creditcard", "debit_card", "bank_card", "last_pay_card",
 		"cvv", "cvv2", "cvc", "cvc2", "csc",
 		"bank_account", "account_number", "iban", "swift_code", "routing_number",
 		"bank_account_no", "bank_account_name", "account_no", "bank_no", "card_num", "bank_card_no",

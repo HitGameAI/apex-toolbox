@@ -38,6 +38,7 @@ func TestActionForKey_Wipe(t *testing.T) {
 		"merchant_key", "system_key", "private_params", "merchant_secret",
 		"bank_account_no", "bankAccountNo", "account_value", "wallet_address",
 		"payee_account", "payout_account_summary", "firebase_detail_json",
+		"credential_params", "credentialParams", "last_pay_card", "lastPayCard",
 		"push_token", "pushToken", "holder",
 		// 身份证件
 		"id_card", "passport", "ssn", "driver_license",

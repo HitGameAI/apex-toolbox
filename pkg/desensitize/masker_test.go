@@ -302,6 +302,13 @@ func TestMasker_PayoutAccountAndSecrets(t *testing.T) {
 	assert.Equal(t, mask, extra["payout_account_summary"])
 	assert.Equal(t, mask, extra["firebase_detail_json"])
 	assert.Equal(t, "order not found", extra["detail"])
+
+	out = m.Mask([]byte(`{"credentialParams":"ck","last_pay_card":"6222021234567890","player_id":"p1"}`))
+	var cardFields map[string]any
+	assert.NoError(t, json.Unmarshal([]byte(out), &cardFields))
+	assert.Equal(t, mask, cardFields["credentialParams"])
+	assert.Equal(t, mask, cardFields["last_pay_card"])
+	assert.Equal(t, "p1", cardFields["player_id"])
 	assert.Equal(t, "missing private_key", extra["note"])
 
 	out = m.Mask([]byte(`{"detail":"-----BEGIN PRIVATE KEY-----\nabc"}`))
