@@ -160,6 +160,7 @@ func (dm *DataMasker) maskJSON(data []byte) (string, bool) {
 func (dm *DataMasker) maskJSONFields(data any) any {
 	switch v := data.(type) {
 	case map[string]any:
+		payout := mapHasPayoutContext(v)
 		for key, value := range v {
 			switch dm.actionFor(key) {
 			case WipeValue:
@@ -173,6 +174,13 @@ func (dm *DataMasker) maskJSONFields(data any) any {
 			case MaskEncrypt:
 				v[key] = maskTextValue(value, dm.encryptValue, dm.getMask())
 			default:
+				// account 同时是登录账号和出款卡号/钱包号
+				// 同对象已能看出是出款账户时，字符串账号一律擦除
+				// 只有单独一个 account 时，仅擦除像卡号的纯数字，登录名保留
+				if s, ok := value.(string); ok && shouldWipeBareValue(key, s, payout) {
+					v[key] = dm.getMask()
+					continue
+				}
 				v[key] = dm.maskJSONFields(value)
 			}
 		}
@@ -227,12 +235,12 @@ func (dm *DataMasker) maskText(s string) string {
 			continue
 		}
 		action := dm.actionFor(key)
-		if action == KeepAsIs {
-			continue
-		}
-
 		valStart, valEnd := valueAfter(s, i, s[i] == ':')
-		if valStart == valEnd {
+		if action == KeepAsIs && valStart != valEnd &&
+			shouldWipeBareValue(key, s[valStart:valEnd], false) {
+			action = WipeValue
+		}
+		if action == KeepAsIs || valStart == valEnd {
 			continue
 		}
 
@@ -380,6 +388,35 @@ func (dm *DataMasker) encryptValue(v string) string {
 }
 
 // ==== 判定与配置 | Decision and config ====
+
+// shouldWipeBareValue 处理不能整词入表、但特定取值必须擦掉的字段
+// account：出款上下文里的账号，或单独出现的纯数字卡号
+// detail：只有值里真有私钥或服务账号 JSON 才擦，错误说明保留
+func shouldWipeBareValue(key, value string, payout bool) bool {
+	if IsBareAccountKey(key) && (payout || LooksLikeAccountNumber(value)) {
+		return true
+	}
+	return IsBareDetailKey(key) && LooksLikeCredentialMaterial(value)
+}
+
+// mapHasPayoutContext 报告对象里是否已有出款账户或银行卡字段
+// 用来区分「登录账号 account」和「出款账号 account」
+func mapHasPayoutContext(m map[string]any) bool {
+	for key := range m {
+		var buf [maxNormalizedKeyLen]byte
+		n, ok := normalizeKeyInto(buf[:], key)
+		if !ok || n == 0 {
+			continue
+		}
+		switch string(buf[:n]) {
+		case "holder", "bankname", "bankbinid", "institutioncode",
+			"walletaddress", "accountvalue", "paymentchannelid",
+			"cardorganization", "bankaccountno", "bankaccountname", "payeeaccount":
+			return true
+		}
+	}
+	return false
+}
 
 // actionFor 判定字段名的动作：先查内置规则表（宽松档），未命中再查调用方追加的列表
 //

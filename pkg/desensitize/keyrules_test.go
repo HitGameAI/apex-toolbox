@@ -35,6 +35,10 @@ func TestActionForKey_Wipe(t *testing.T) {
 		"otp", "sms_code", "captcha", "redeem_code", "gift_card", "cd_key",
 		// 支付与金融
 		"card_number", "cvv", "bank_account", "iban", "pay_password",
+		"merchant_key", "system_key", "private_params", "merchant_secret",
+		"bank_account_no", "bankAccountNo", "account_value", "wallet_address",
+		"payee_account", "payout_account_summary", "firebase_detail_json",
+		"push_token", "pushToken", "holder",
 		// 身份证件
 		"id_card", "passport", "ssn", "driver_license",
 		// 地址与姓名
@@ -104,6 +108,8 @@ func TestActionForKey_OpsFieldsStayVisible(t *testing.T) {
 		"name", "service_name", "table_name", "file_name", "user_id", "order_id",
 		"trace_id", "span_id", "request_id", "method", "path", "duration", "region",
 		"address", "count", "size", "offset", "limit", "version", "env",
+		"account_id", "account_type", "payout_account_id", "placeholder",
+		"merchant_no", "merchant_name", "key_id", "card_bin", "card_type", "app_version",
 		// design 不应被 sign 后缀牵连
 		"design", "redesign",
 	}
@@ -155,10 +161,34 @@ func TestActionForKeyLoose(t *testing.T) {
 	assert.Equal(t, KeepAsIs, ActionForKeyLoose("status_code"))
 	assert.Equal(t, KeepAsIs, ActionForKeyLoose("ip_address"))
 
+	// holder 只做精确匹配，不能把 placeholder 卷进去
+	assert.Equal(t, WipeValue, ActionForKey("holder"))
+	assert.Equal(t, KeepAsIs, ActionForKey("placeholder"))
+	assert.Equal(t, KeepAsIs, ActionForKeyLoose("placeholder"))
+
 	// 完全无关的字段名两种判定都落空
 	assert.Equal(t, KeepAsIs, ActionForKeyLoose("region"))
 	assert.Equal(t, KeepAsIs, ActionForKeyLoose(""))
 	assert.Equal(t, KeepAsIs, ActionForKeyLoose("用户字段"))
+}
+
+// TestBareAccountKey 登录账号与卡号共用 account 字段名
+func TestBareAccountKey(t *testing.T) {
+	assert.True(t, IsBareAccountKey("account"))
+	assert.True(t, IsBareAccountKey("Account"))
+	assert.False(t, IsBareAccountKey("account_id"))
+	assert.False(t, IsBareAccountKey("account_value"))
+	assert.False(t, IsBareAccountKey("payout_account_id"))
+
+	assert.True(t, LooksLikeAccountNumber("6222021234567890"))
+	assert.True(t, LooksLikeAccountNumber("6222 0212-3456-7890"))
+	assert.False(t, LooksLikeAccountNumber("player01"))
+	assert.False(t, LooksLikeAccountNumber("1234567"))
+	assert.Equal(t, KeepAsIs, ActionForKey("account"))
+	assert.Equal(t, KeepAsIs, ActionForKey("detail"))
+	assert.True(t, LooksLikeCredentialMaterial(`{"type":"service_account","private_key":"abc"}`))
+	assert.True(t, LooksLikeCredentialMaterial("-----BEGIN PRIVATE KEY-----\nabc"))
+	assert.False(t, LooksLikeCredentialMaterial("missing private_key"))
 }
 
 // TestRegisterSensitiveKeys 自定义敏感字段名的注册与注销

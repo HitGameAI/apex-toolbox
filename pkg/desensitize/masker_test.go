@@ -254,6 +254,62 @@ func TestMasker_Truncation(t *testing.T) {
 	assert.LessOrEqual(t, len(out), 64)
 }
 
+func TestMasker_PayoutAccountAndSecrets(t *testing.T) {
+	m := NewMasker()
+	mask := DefaultMaskerConfig().SensitiveMask
+
+	out := m.Mask([]byte(`{"account":"player01","password":"hunter2"}`))
+	var login map[string]any
+	assert.NoError(t, json.Unmarshal([]byte(out), &login))
+	assert.Equal(t, "player01", login["account"])
+	assert.Equal(t, mask, login["password"])
+
+	out = m.Mask([]byte(`{"account":"6222021234567890","holder":"张三","bank_name":"ICBC"}`))
+	var card map[string]any
+	assert.NoError(t, json.Unmarshal([]byte(out), &card))
+	assert.Equal(t, mask, card["account"])
+	assert.Equal(t, mask, card["holder"])
+	assert.Equal(t, "ICBC", card["bank_name"])
+
+	out = m.Mask([]byte(`{"payment_channel_id":12,"account":"wallet_user"}`))
+	var wallet map[string]any
+	assert.NoError(t, json.Unmarshal([]byte(out), &wallet))
+	assert.Equal(t, mask, wallet["account"])
+	assert.Equal(t, float64(12), wallet["payment_channel_id"])
+
+	out = m.Mask([]byte(`{"merchant_secret":"ms","private_key":"pk","private_params":"pp","system_key":"sk","merchant_key":"mk","push_token":"pt","account_value":"6222","wallet_address":"0xabc","bank_account_no":"6222","password":"pw","account_id":"a1","merchant_no":"m1"}`))
+	var secrets map[string]any
+	assert.NoError(t, json.Unmarshal([]byte(out), &secrets))
+	for _, key := range []string{
+		"merchant_secret", "private_key", "private_params", "system_key", "merchant_key",
+		"push_token", "account_value", "wallet_address", "bank_account_no", "password",
+	} {
+		assert.Equal(t, mask, secrets[key], key)
+	}
+	assert.Equal(t, "a1", secrets["account_id"])
+	assert.Equal(t, "m1", secrets["merchant_no"])
+
+	out = m.Mask([]byte(`{"account":{"account_value":"6222021234567890","id":7}}`))
+	var nested map[string]any
+	assert.NoError(t, json.Unmarshal([]byte(out), &nested))
+	inner := nested["account"].(map[string]any)
+	assert.Equal(t, mask, inner["account_value"])
+	assert.Equal(t, float64(7), inner["id"])
+
+	out = m.Mask([]byte(`{"payout_account_summary":"6222021234567890","firebase_detail_json":"{\"private_key\":\"abc\"}","detail":"order not found","note":"missing private_key"}`))
+	var extra map[string]any
+	assert.NoError(t, json.Unmarshal([]byte(out), &extra))
+	assert.Equal(t, mask, extra["payout_account_summary"])
+	assert.Equal(t, mask, extra["firebase_detail_json"])
+	assert.Equal(t, "order not found", extra["detail"])
+	assert.Equal(t, "missing private_key", extra["note"])
+
+	out = m.Mask([]byte(`{"detail":"-----BEGIN PRIVATE KEY-----\nabc"}`))
+	var pem map[string]any
+	assert.NoError(t, json.Unmarshal([]byte(out), &pem))
+	assert.Equal(t, mask, pem["detail"])
+}
+
 func TestMasker_EmptyInput(t *testing.T) {
 	m := NewMasker()
 	assert.Equal(t, "", m.Mask(nil))

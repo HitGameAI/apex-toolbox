@@ -72,6 +72,12 @@ var exactKeyRules = buildKeyRules(map[KeyAction][]string{
 		"api_key", "api_secret", "app_key", "app_secret", "client_secret",
 		"access_key", "access_key_secret", "secret_key", "secret", "private_key",
 		"encryption_key", "signing_key", "ssh_key", "license_key",
+		// key 不作通用后缀，避免 cache_key 一类运维字段被误擦
+		// 系统密钥、商户密钥只收录业务里真实承载密钥的字段名
+		"merchant_key", "system_key", "sys_key", "sign_key", "pay_key", "mch_key",
+		"channel_key", "callback_key", "aes_key", "hmac_key",
+		"merchant_secret", "system_secret", "mch_secret",
+		"private_params", "firebase_detail_json",
 		"credential", "credentials",
 		"signature", "sign", "sign_str",
 		"session", "session_id", "sessid", "jsessionid", "phpsessid",
@@ -90,6 +96,9 @@ var exactKeyRules = buildKeyRules(map[KeyAction][]string{
 		"credit_card", "creditcard", "debit_card", "bank_card",
 		"cvv", "cvv2", "cvc", "cvc2", "csc",
 		"bank_account", "account_number", "iban", "swift_code", "routing_number",
+		"bank_account_no", "bank_account_name", "account_no", "bank_no", "card_num", "bank_card_no",
+		"account_value", "wallet_address", "wallet_addr",
+		"payee_account", "payee_name", "payout_account_summary",
 		"pay_password", "payment_password", "withdraw_password", "trade_password",
 
 		// ---- 身份证件 ----
@@ -106,13 +115,16 @@ var exactKeyRules = buildKeyRules(map[KeyAction][]string{
 		// ---- 自然人姓名（客服与电商工单里的真实姓名）----
 		// name 不入表也不作后缀：通用日志里 service_name / table_name / file_name 远多于人名
 		"real_name", "realname", "receiver_name", "consignee", "contact_name",
-		"customer_name", "holder_name", "card_holder",
+		"customer_name", "holder_name", "card_holder", "holder", "cardholder",
 
 		// ---- 出生信息 ----
 		"birthday", "birth_date", "date_of_birth", "dob",
 
 		// ---- 设备与广告标识（游戏风控链路常带，属可追踪 PII）----
 		"imei", "imsi", "idfa", "idfv", "oaid", "aaid", "android_id", "mac_address",
+
+		// ---- 推送凭据：可用来向指定设备下发消息 ----
+		"push_token", "device_token", "fcm_token", "apns_token",
 
 		// ---- 预签名链接：链接本身即凭据，泄漏等同泄漏对象存储里的文件 ----
 		"signed_url", "presigned_url", "download_url", "upload_url",
@@ -158,6 +170,10 @@ var suffixKeyRules = []struct {
 	{"idcardno", WipeValue},
 	{"cardno", WipeValue},
 	{"cardnumber", WipeValue},
+	{"accountno", WipeValue},
+	{"accountvalue", WipeValue},
+	{"walletaddress", WipeValue},
+	{"privateparams", WipeValue},
 	{"signedurl", WipeValue},
 	{"downloadurl", WipeValue},
 	{"uploadurl", WipeValue},
@@ -442,6 +458,92 @@ func ActionForKey(key string) KeyAction {
 // IsCredentialKey 报告字段名是否为需整体擦除的凭据（供 URL 查询参数判定复用）
 func IsCredentialKey(key string) bool {
 	return ActionForKey(key) == WipeValue
+}
+
+// IsBareAccountKey 报告字段名归一化后是否恰好为 account
+//
+// 出款银行卡号与三方钱包账号复用了这个字段名，同时登录账号也叫 account
+// 不能把 account 放进精确表，否则 account_id 不会被误伤，但所有登录账号都会从日志消失
+// 这里只识别「恰好是 account」的字段，account_value、account_id 归一化后更长，缓冲装不下即返回 false
+func IsBareAccountKey(key string) bool {
+	var buf [8]byte
+	n, ok := normalizeKeyInto(buf[:], key)
+	if !ok || n != 7 {
+		return false
+	}
+	return buf[0] == 'a' && buf[1] == 'c' && buf[2] == 'c' && buf[3] == 'o' &&
+		buf[4] == 'u' && buf[5] == 'n' && buf[6] == 't'
+}
+
+// minAccountNumberDigits 视为卡号或银行账号所需的最少数字位数
+// 短数字（验证码、小编号）保持可见，避免把登录排障线索一并擦掉
+const minAccountNumberDigits = 8
+
+// LooksLikeAccountNumber 报告字符串是否像卡号或银行账号
+// 去掉空格与连字符后至少 minAccountNumberDigits 位且全部为数字
+// 带字母的登录账号不命中
+func LooksLikeAccountNumber(s string) bool {
+	n := 0
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c == ' ' || c == '-' {
+			continue
+		}
+		if c < '0' || c > '9' {
+			return false
+		}
+		n++
+	}
+	return n >= minAccountNumberDigits
+}
+
+// IsBareDetailKey 报告字段名归一化后是否恰好为 detail
+// Firebase 服务账号 JSON 用这个字段名保存，同时大量错误说明也叫 detail
+// 不能整词擦除，只在值本身像私钥或服务账号 JSON 时擦
+func IsBareDetailKey(key string) bool {
+	var buf [8]byte
+	n, ok := normalizeKeyInto(buf[:], key)
+	if !ok || n != 6 {
+		return false
+	}
+	return buf[0] == 'd' && buf[1] == 'e' && buf[2] == 't' && buf[3] == 'a' && buf[4] == 'i' && buf[5] == 'l'
+}
+
+// LooksLikeCredentialMaterial 报告文本里是否嵌有私钥或服务账号凭据
+// 只认 PEM 头、JSON 私钥字段和服务账号类型，避免把 “missing private_key” 这类错误说明擦掉
+func LooksLikeCredentialMaterial(s string) bool {
+	if containsFoldASCII(s, "-----begin ") {
+		return true
+	}
+	if containsFoldASCII(s, `"private_key"`) || containsFoldASCII(s, `"private_key_id"`) {
+		return true
+	}
+	return containsFoldASCII(s, "service_account")
+}
+
+// containsFoldASCII 报告 s 是否包含 lower 的大小写不敏感子串，lower 必须是小写 ASCII
+func containsFoldASCII(s, lower string) bool {
+	if lower == "" || len(s) < len(lower) {
+		return false
+	}
+	n := len(lower)
+	for i := 0; i+n <= len(s); i++ {
+		match := true
+		for j := 0; j < n; j++ {
+			c := s[i+j]
+			if c >= 'A' && c <= 'Z' {
+				c += 'a' - 'A'
+			}
+			if c != lower[j] {
+				match = false
+				break
+			}
+		}
+		if match {
+			return true
+		}
+	}
+	return false
 }
 
 // ==== 指纹与可还原掩码 | Fingerprint and recoverable masking ====

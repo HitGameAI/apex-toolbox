@@ -99,6 +99,10 @@ func (l *Logger) appendSanitizedJSONValue(buf []byte, key string, v any) []byte 
 		return appendMaskedJSON(buf, v, appendEncrypted)
 	}
 
+	if s, ok := textOf(v); ok && shouldWipeBareLogValue(key, s) {
+		return appendJSONString(buf, desensitize.RedactedText)
+	}
+
 	if l.sanitize == SanitizeKeysAndValues {
 		if s, ok := textOf(v); ok {
 			return appendScannedJSONString(buf, l.capped(s))
@@ -160,6 +164,10 @@ func (l *Logger) appendSanitizedTextValue(buf []byte, key string, v any) []byte 
 		}
 	}
 
+	if s, ok := textOf(v); ok && shouldWipeBareLogValue(key, s) {
+		return append(buf, desensitize.RedactedText...)
+	}
+
 	if l.sanitize == SanitizeKeysAndValues {
 		if s, ok := textOf(v); ok {
 			return appendScannedText(buf, l.capped(s))
@@ -195,6 +203,15 @@ func (l *Logger) appendSanitizedMessage(buf []byte, msg string, asJSON bool) []b
 		return appendScannedJSONString(buf, msg)
 	}
 	return appendScannedText(buf, msg)
+}
+
+// shouldWipeBareLogValue 结构化日志里对 account、detail 的取值判断
+// 日志没有同对象上下文，account 只擦纯数字卡号
+func shouldWipeBareLogValue(key, value string) bool {
+	if desensitize.IsBareAccountKey(key) && desensitize.LooksLikeAccountNumber(value) {
+		return true
+	}
+	return desensitize.IsBareDetailKey(key) && desensitize.LooksLikeCredentialMaterial(value)
 }
 
 // appendEncrypted 追加确定性加密后的值，未装配密钥时整体擦除
