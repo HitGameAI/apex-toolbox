@@ -1,11 +1,11 @@
 name: Bump Upstream
 
-# 实际流程全在 kamalyes/deploy-pipeline 的 go-bump-upstream.yml 里，三十来个 Go 库共用一份
+# 实际流程全在 HitGameAI/deploy-pipeline 的 go-bump-upstream.yml 里，三十来个 Go 库共用一份
 #
 # 相比原先各仓库手写的版本，关键差别是多了一组闸门：升完依赖先 build + vet + test，
 # 过了才允许推默认分支；没过就开分支提 PR 并把 job 判红
 #
-# [EN] The pipeline lives in go-bump-upstream.yml in kamalyes/deploy-pipeline. A bump must
+# [EN] The pipeline lives in go-bump-upstream.yml in HitGameAI/deploy-pipeline. A bump must
 # build, vet and test before it may touch the default branch, and otherwise becomes a branch
 # and a pull request
 
@@ -23,7 +23,7 @@ concurrency:
 
 jobs:
   bump:
-    uses: kamalyes/deploy-pipeline/.github/workflows/go-bump-upstream.yml@master
+    uses: HitGameAI/deploy-pipeline/.github/workflows/go-bump-upstream.yml@013c0e1efc2b97819ca13f44fe5432be79f58867
     secrets:
       APP_ID: ${{ secrets.APP_ID }}
       APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
