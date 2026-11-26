@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestCompressResult 测试 CompressResult 结构体基本功能
@@ -286,21 +287,26 @@ func TestCompressDefaultUnchanged(t *testing.T) {
 func TestCompressPoolsArePerLevel(t *testing.T) {
 	data := bytes.Repeat([]byte("2026-10-18 21:00:03 INFO handler=GetUser status=200\n"), 200)
 
-	// 交替使用两个级别多轮，每轮的输出大小都必须与该级别首轮一致
-	fast, err := GzipCompressWithLevel(data, gzip.BestSpeed)
-	assert.NoError(t, err)
-	best, err := GzipCompressWithLevel(data, gzip.BestCompression)
-	assert.NoError(t, err)
-	assert.NotEqual(t, len(fast), len(best), "这份载荷上两个级别的体积应当不同，否则本测试无效")
+	levels := []int{gzip.BestSpeed, gzip.BestCompression}
+	want := make(map[int][]byte, len(levels))
+	for _, level := range levels {
+		var output bytes.Buffer
+		writer, err := gzip.NewWriterLevel(&output, level)
+		require.NoError(t, err)
+		_, err = writer.Write(data)
+		require.NoError(t, err)
+		require.NoError(t, writer.Close())
+		want[level] = output.Bytes()
+	}
+	// 参考输出必须可区分，即使当前 Go 的两个级别产生相同长度。
+	require.NotEqual(t, want[gzip.BestSpeed], want[gzip.BestCompression])
 
-	for i := 0; i < 20; i++ {
-		f, err := GzipCompressWithLevel(data, gzip.BestSpeed)
-		assert.NoError(t, err)
-		assert.Equal(t, len(fast), len(f), "第 %d 轮 BestSpeed 体积漂移，池被串用了", i)
-
-		bst, err := GzipCompressWithLevel(data, gzip.BestCompression)
-		assert.NoError(t, err)
-		assert.Equal(t, len(best), len(bst), "第 %d 轮 BestCompression 体积漂移，池被串用了", i)
+	for round := 0; round < 20; round++ {
+		for _, level := range levels {
+			got, err := GzipCompressWithLevel(data, level)
+			require.NoError(t, err)
+			assert.Equal(t, want[level], got, "第 %d 轮级别 %d 偏离标准库输出", round, level)
+		}
 	}
 }
 
