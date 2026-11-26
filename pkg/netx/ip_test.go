@@ -11,35 +11,52 @@
 package netx
 
 import (
-	"fmt"
+	"io"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
+const fixturePublicIP = "203.0.113.8"
+
+func publicIPFixtureURL(t *testing.T) string {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, fixturePublicIP)
+	}))
+	t.Cleanup(server.Close)
+	return server.URL
+}
+
 func TestGetLocalInterfaceIPAndExternalIP(t *testing.T) {
-	externalIP, internalIP, err := GetLocalInterfaceIPAndExternalIP()
-	assert.Nil(t, err)
-	assert.NotEmpty(t, externalIP)
-	assert.NotEmpty(t, internalIP)
-	t.Logf("externalIP %s", externalIP)
-	t.Logf("internalIP %s", internalIP)
+	wantPrivate, privateErr := GetPrivateIP()
+	private, public, err := GetLocalInterfaceIPAndExternalIP(publicIPFixtureURL(t))
+	if privateErr != nil {
+		assert.EqualError(t, err, privateErr.Error())
+		assert.Empty(t, private)
+		assert.Empty(t, public)
+		return
+	}
+	assert.NoError(t, err)
+	assert.Equal(t, wantPrivate, private)
+	assert.Equal(t, fixturePublicIP, public)
 }
 
 func TestGetLocalInterfaceIPs(t *testing.T) {
 	ips, err := GetLocalInterfaceIPs()
-	assert.Nil(t, err)
-	assert.NotEmpty(t, ips, fmt.Sprintf("Expected at least one global unicast IP, got: %v", ips))
+	assert.NoError(t, err)
 	for _, ip := range ips {
-		assert.NotEmpty(t, ip, fmt.Sprintf("Invalid IP address: %s", ip))
+		assert.NotEmpty(t, ip)
+		assert.False(t, ip.IsLoopback(), "loopback address returned by GetLocalInterfaceIPs")
 	}
 }
 
 func TestGetConNetPublicIP(t *testing.T) {
-	ip, err := GetConNetPublicIP()
-	assert.Nil(t, err)
-	assert.NotEmpty(t, ip, fmt.Sprintf("Expected public IP, got: %s", ip))
+	ip, err := GetConNetPublicIP(publicIPFixtureURL(t))
+	assert.NoError(t, err)
+	assert.Equal(t, fixturePublicIP, ip)
 }
 
 func TestGetClientIP(t *testing.T) {

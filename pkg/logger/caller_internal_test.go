@@ -19,6 +19,7 @@
 package logger
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -34,8 +35,8 @@ func TestSelfModPrefix_Derived(t *testing.T) {
 	if strings.HasSuffix(selfModPrefix, ".") {
 		t.Fatalf("selfModPrefix 不得含末尾 '.'：边界字符由 isSelfFrame 判定，实得 %q", selfModPrefix)
 	}
-	if !strings.Contains(selfModPrefix, "go-toolbox/pkg/logger") {
-		t.Fatalf("selfModPrefix 应含模块名，实得 %q", selfModPrefix)
+	if want := reflect.TypeOf(Logger{}).PkgPath(); selfModPrefix != want {
+		t.Fatalf("selfModPrefix = %q，预期 %q", selfModPrefix, want)
 	}
 }
 
