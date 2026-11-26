@@ -17,9 +17,9 @@ jobs:
       matrix:
         include:
           - name: baseline
-            source: e3b3ea121a71352971cd51c4d0e6ce6e29183786
+            source: d242bd3e78cecb99cc417ae92e303780b2131b2d
           - name: s3
-            source: 19db8a58208a659fb4302995dbd148957e9e7076
+            source: d5bb0259d0dfb8249cffd8711c29e975c4b545e3
     env:
       GOTOOLCHAIN: local
       GOPROXY: https://proxy.golang.org
@@ -27,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
-          fetch-depth: 3
+          fetch-depth: 5
           persist-credentials: false
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
         with:
@@ -64,6 +64,6 @@ jobs:
             exec setpriv --reuid "$1" --regid "$2" --clear-groups env -i \
               PATH=/usr/bin:/bin HOME="$3" GOMODCACHE="$4" GOCACHE="$5" \
               GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off AWS_EC2_METADATA_DISABLED=true \
-              "$6" test -mod=readonly -race -timeout 3m ./...
+              "$6" test -mod=readonly -race -count=1 -shuffle=on -timeout 10m ./...
           ' _ "$(id -u)" "$(id -g)" "$test_home" "$(go env GOMODCACHE)" "$(go env GOCACHE)" "$(command -v go)"
           git diff --exit-code -- go.mod go.sum
