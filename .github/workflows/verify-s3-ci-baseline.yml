@@ -1,0 +1,69 @@
+name: Verify Toolbox S3 and CI baseline
+
+on:
+  push:
+    branches: [codex/verify-toolbox-s3-20261126]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Verify ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: baseline
+            source: e3b3ea121a71352971cd51c4d0e6ce6e29183786
+          - name: s3
+            source: 19db8a58208a659fb4302995dbd148957e9e7076
+    env:
+      GOTOOLCHAIN: local
+      GOPROXY: https://proxy.golang.org
+      GOSUMDB: sum.golang.org
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          fetch-depth: 3
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version: '1.25.0'
+          cache: false
+      - name: Select the exact public source tree
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ matrix.source }}
+        run: |
+          git worktree add --detach "$RUNNER_TEMP/toolbox-source" "$SOURCE_SHA"
+          test "$(git -C "$RUNNER_TEMP/toolbox-source" rev-parse HEAD)" = "$SOURCE_SHA"
+      - name: Check format, module locks, build and vet
+        working-directory: ${{ runner.temp }}/toolbox-source
+        shell: bash
+        run: |
+          unformatted="$(gofmt -s -l .)"
+          if [ -n "$unformatted" ]; then
+            printf '%s\n' "$unformatted" >&2
+            exit 1
+          fi
+          go mod download
+          go mod tidy -diff
+          go build -mod=readonly ./...
+          go vet -mod=readonly ./...
+          git diff --exit-code -- go.mod go.sum
+      - name: Run the race suite with loopback only
+        working-directory: ${{ runner.temp }}/toolbox-source
+        shell: bash
+        run: |
+          test_home="$(mktemp -d)"
+          sudo unshare --net /bin/bash --noprofile --norc -e -c '
+            ip link set lo up
+            exec setpriv --reuid "$1" --regid "$2" --clear-groups env -i \
+              PATH=/usr/bin:/bin HOME="$3" GOMODCACHE="$4" GOCACHE="$5" \
+              GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off AWS_EC2_METADATA_DISABLED=true \
+              "$6" test -mod=readonly -race -timeout 3m ./...
+          ' _ "$(id -u)" "$(id -g)" "$test_home" "$(go env GOMODCACHE)" "$(go env GOCACHE)" "$(command -v go)"
+          git diff --exit-code -- go.mod go.sum
