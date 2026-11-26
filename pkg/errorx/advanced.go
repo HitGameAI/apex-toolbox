@@ -42,7 +42,7 @@ func (c *ErrorChain) AddError(err error) *ErrorChain {
 	if err == nil {
 		return c
 	}
-	
+
 	// 获取调用位置
 	_, file, line, ok := runtime.Caller(1)
 	var location string
@@ -51,14 +51,14 @@ func (c *ErrorChain) AddError(err error) *ErrorChain {
 	} else {
 		location = "unknown"
 	}
-	
+
 	info := ErrorInfo{
 		Error:     err,
 		Timestamp: time.Now(),
 		Location:  location,
 		Context:   make(map[string]interface{}),
 	}
-	
+
 	c.errors = append(c.errors, info)
 	return c
 }
@@ -68,7 +68,7 @@ func (c *ErrorChain) AddErrorWithContext(err error, context map[string]interface
 	if err == nil {
 		return c
 	}
-	
+
 	// 获取调用位置
 	_, file, line, ok := runtime.Caller(1)
 	var location string
@@ -77,14 +77,14 @@ func (c *ErrorChain) AddErrorWithContext(err error, context map[string]interface
 	} else {
 		location = "unknown"
 	}
-	
+
 	info := ErrorInfo{
 		Error:     err,
 		Timestamp: time.Now(),
 		Location:  location,
 		Context:   context,
 	}
-	
+
 	c.errors = append(c.errors, info)
 	return c
 }
@@ -112,12 +112,12 @@ func (c *ErrorChain) Error() string {
 	if len(c.errors) == 0 {
 		return ""
 	}
-	
+
 	if len(c.errors) == 1 {
-		return fmt.Sprintf("error at %s: %s", 
+		return fmt.Sprintf("error at %s: %s",
 			c.errors[0].Location, c.errors[0].Error.Error())
 	}
-	
+
 	var result string
 	for i, info := range c.errors {
 		if i > 0 {
@@ -125,7 +125,7 @@ func (c *ErrorChain) Error() string {
 		}
 		result += fmt.Sprintf("[%s] %s", info.Location, info.Error.Error())
 	}
-	
+
 	return fmt.Sprintf("error chain: %s", result)
 }
 
@@ -134,7 +134,7 @@ func (c *ErrorChain) String() string {
 	if len(c.errors) == 0 {
 		return "no errors"
 	}
-	
+
 	var result string
 	for i, info := range c.errors {
 		result += fmt.Sprintf("Error %d:\n", i+1)
@@ -146,7 +146,7 @@ func (c *ErrorChain) String() string {
 		}
 		result += "\n"
 	}
-	
+
 	return result
 }
 
@@ -161,7 +161,7 @@ func NewErrorWithStack(message string) *ErrorWithStack {
 	stack := make([]uintptr, 32)
 	n := runtime.Callers(2, stack)
 	stack = stack[:n]
-	
+
 	return &ErrorWithStack{
 		BaseError: NewBaseError(message),
 		Stack:     stack,
@@ -177,22 +177,22 @@ func (e *ErrorWithStack) Error() string {
 func (e *ErrorWithStack) GetStackTrace() string {
 	frames := runtime.CallersFrames(e.Stack)
 	var result string
-	
+
 	for {
 		frame, more := frames.Next()
 		result += fmt.Sprintf("  %s:%d %s\n", frame.File, frame.Line, frame.Function)
-		
+
 		if !more {
 			break
 		}
 	}
-	
+
 	return result
 }
 
 // String 返回包含调用栈的详细信息
 func (e *ErrorWithStack) String() string {
-	return fmt.Sprintf("Error: %s\nStack trace:\n%s", 
+	return fmt.Sprintf("Error: %s\nStack trace:\n%s",
 		e.BaseError.Error(), e.GetStackTrace())
 }
 
@@ -218,7 +218,7 @@ func NewRetryableError(message string, maxRetries int, retryAfter time.Duration)
 
 // Error 实现error接口
 func (e *RetryableError) Error() string {
-	return fmt.Sprintf("%s (retry %d/%d)", 
+	return fmt.Sprintf("%s (retry %d/%d)",
 		e.BaseError.Error(), e.CurrentRetry, e.MaxRetries)
 }
 
@@ -265,7 +265,7 @@ func NewValidationError(field, rule string, value interface{}, message string) *
 
 // Error 实现error接口
 func (e *ValidationError) Error() string {
-	return fmt.Sprintf("validation failed for field '%s' with rule '%s': %s", 
+	return fmt.Sprintf("validation failed for field '%s' with rule '%s': %s",
 		e.Field, e.Rule, e.BaseError.Error())
 }
 
@@ -301,11 +301,11 @@ func (ve *ValidationErrors) Error() string {
 	if len(ve.Errors) == 0 {
 		return ""
 	}
-	
+
 	if len(ve.Errors) == 1 {
 		return ve.Errors[0].Error()
 	}
-	
+
 	var result string
 	for i, err := range ve.Errors {
 		if i > 0 {
@@ -313,7 +313,7 @@ func (ve *ValidationErrors) Error() string {
 		}
 		result += err.Error()
 	}
-	
+
 	return fmt.Sprintf("multiple validation errors: %s", result)
 }
 
@@ -358,7 +358,7 @@ func Recover(fn func()) (err error) {
 			}
 		}
 	}()
-	
+
 	fn()
 	return nil
 }
@@ -382,14 +382,14 @@ func Is(err, target error) bool {
 	if target == nil {
 		return err == target
 	}
-	
+
 	if err == target {
 		return true
 	}
-	
+
 	if wrapped := Unwrap(err); wrapped != nil {
 		return Is(wrapped, target)
 	}
-	
+
 	return false
 }

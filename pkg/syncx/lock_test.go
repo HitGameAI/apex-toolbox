@@ -559,11 +559,11 @@ func TestNewLock(t *testing.T) {
 func TestLockBasic(t *testing.T) {
 	lock := NewLock()
 	counter := 0
-	
+
 	lock.Lock()
 	counter++
 	lock.Unlock()
-	
+
 	assert.Equal(t, 1, counter, "Counter should be 1")
 }
 
@@ -573,7 +573,7 @@ func TestLockConcurrency(t *testing.T) {
 	counter := int32(0)
 	iterations := 1000
 	goroutines := 10
-	
+
 	var wg sync.WaitGroup
 	for i := 0; i < goroutines; i++ {
 		wg.Add(1)
@@ -586,9 +586,9 @@ func TestLockConcurrency(t *testing.T) {
 			}
 		}()
 	}
-	
+
 	wg.Wait()
-	
+
 	expected := int32(goroutines * iterations)
 	assert.Equal(t, expected, counter, "Counter should be %d", expected)
 }
@@ -596,15 +596,15 @@ func TestLockConcurrency(t *testing.T) {
 // TestLockTryLock 测试 TryLock 功能
 func TestLockTryLock(t *testing.T) {
 	lock := NewLock()
-	
+
 	// 第一次应该成功
 	assert.True(t, lock.TryLock(), "First TryLock should succeed")
-	
+
 	// 已经锁定，第二次应该失败
 	assert.False(t, lock.TryLock(), "Second TryLock should fail")
-	
+
 	lock.Unlock()
-	
+
 	// 解锁后应该能再次获取
 	assert.True(t, lock.TryLock(), "TryLock after unlock should succeed")
 	lock.Unlock()
@@ -614,24 +614,24 @@ func TestLockTryLock(t *testing.T) {
 func TestLockWithLock(t *testing.T) {
 	lock := NewLock()
 	executed := false
-	
+
 	WithLock(lock, func() {
 		executed = true
 	})
-	
+
 	assert.True(t, executed, "Operation should be executed")
 }
 
 // TestLockWithTryLock 测试 WithTryLock 配合 Lock 使用
 func TestLockWithTryLock(t *testing.T) {
 	lock := NewLock()
-	
+
 	// 应该成功
 	err := WithTryLock(lock, func() error {
 		return nil
 	})
 	assert.NoError(t, err, "WithTryLock should succeed")
-	
+
 	// 锁定后再尝试应该失败
 	lock.Lock()
 	err = WithTryLock(lock, func() error {

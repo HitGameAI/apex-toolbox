@@ -31,7 +31,8 @@ import (
 // 辅助函数：生成 RSA 密钥对并进行有效性断言
 func generateAndAssertRsaKeyPair(size RsaKeySize, t *testing.T) *RsaKeyPair {
 	keyPair, err := GenerateRsaKeyPair(size)
-	assert.NoError(t, err, "生成 RSA 密钥对时发生错误")
+	require.NoError(t, err, "生成 RSA 密钥对时发生错误")
+	require.NotNil(t, keyPair)
 	assert.NotNil(t, keyPair.PrivateKey, "私钥应不为 nil")
 	assert.NotNil(t, keyPair.PublicKey, "公钥应不为 nil")
 	return keyPair
@@ -154,7 +155,12 @@ func TestEncryptRandSalt(t *testing.T) {
 
 // 测试生成 RSA 密钥对
 func TestGenerateRsaKeyPair(t *testing.T) {
-	keySizes := []RsaKeySize{RsaKeySize512, RsaKeySize1024, RsaKeySize2048, RsaKeySize4096}
+	t.Setenv("GODEBUG", "rsa1024min=1")
+	keyPair, err := GenerateRsaKeyPair(RsaKeySize512)
+	require.Error(t, err)
+	require.Nil(t, keyPair)
+
+	keySizes := []RsaKeySize{RsaKeySize1024, RsaKeySize2048, RsaKeySize4096}
 	for _, size := range keySizes {
 		generateAndAssertRsaKeyPair(size, t)
 	}

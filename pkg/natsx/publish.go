@@ -15,8 +15,8 @@ import (
 	"fmt"
 	"time"
 
-	jsoniter "github.com/json-iterator/go"
 	"github.com/HitGameAI/apex-toolbox/pkg/retry"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/nats-io/nats.go"
 )
 

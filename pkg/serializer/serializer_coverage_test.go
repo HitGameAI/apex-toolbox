@@ -821,7 +821,7 @@ func TestJSONMarshal_InvalidValue(t *testing.T) {
 func TestJSONFieldInfo_UnexportedField(t *testing.T) {
 	type withUnexported struct {
 		Public  string `json:"public"`
-		private string `json:"private"`
+		private string
 	}
 	// 设置一个私有字段的值
 	v := withUnexported{Public: "p", private: "secret"}

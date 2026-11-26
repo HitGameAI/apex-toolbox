@@ -89,16 +89,16 @@ func MapAnyToKVPairs(m map[string]any) []any {
 //
 // 使用示例：
 //
-//	baseFields := []interface{}{"user_id", "123", "tenant_id", "678"}
-//	extraFields := []interface{}{"action", "login", "ip", "192.168.1.1"}
-//	allFields := convert.MergeKVPairs(baseFields, extraFields)
+//		baseFields := []interface{}{"user_id", "123", "tenant_id", "678"}
+//		extraFields := []interface{}{"action", "login", "ip", "192.168.1.1"}
+//		allFields := convert.MergeKVPairs(baseFields, extraFields)
 //
-//	用于函数调用
-//	someFunc("消息", allFields...)
+//		用于函数调用
+//		someFunc("消息", allFields...)
 //
-//  map 和切片
-//	mapFields := map[string]interface{}{"status": "ok"}
-//	merged := convert.MergeKVPairs(baseFields, convert.MapToKVPairs(mapFields))
+//	 map 和切片
+//		mapFields := map[string]interface{}{"status": "ok"}
+//		merged := convert.MergeKVPairs(baseFields, convert.MapToKVPairs(mapFields))
 func MergeKVPairs(kvSlices ...[]interface{}) []interface{} {
 	if len(kvSlices) == 0 {
 		return nil
@@ -125,14 +125,14 @@ func MergeKVPairs(kvSlices ...[]interface{}) []interface{} {
 //
 // 使用示例：
 //
-//  构建参数列表
-//	params := convert.KVPairs("user_id", "123", "action", "login")
+//	 构建参数列表
+//		params := convert.KVPairs("user_id", "123", "action", "login")
 //
-//	用于函数调用
-//	someFunc("消息", convert.KVPairs("key1", "val1", "key2", "val2")...)
+//		用于函数调用
+//		someFunc("消息", convert.KVPairs("key1", "val1", "key2", "val2")...)
 //
-//	提供变量存储
-//	fields := convert.KVPairs("status", "active", "count", 100)
+//		提供变量存储
+//		fields := convert.KVPairs("status", "active", "count", 100)
 //
 // 注意：此函数主要提供语义清晰性，实际上不做任何转换，
 // 相当于类型别名和文档说明
@@ -169,9 +169,9 @@ func KVPairsToMap(keysAndValues []interface{}) map[string]interface{} {
 //
 // 使用示例：
 //
-//	kvs := []interface{}{"user_id", "123"}
-//	kvs = convert.AddKVPair(kvs, "action", "login")
-//  kvs = []interface{}{"user_id", "123", "action", "login"}
+//		kvs := []interface{}{"user_id", "123"}
+//		kvs = convert.AddKVPair(kvs, "action", "login")
+//	 kvs = []interface{}{"user_id", "123", "action", "login"}
 func AddKVPair(kvs []interface{}, key string, value interface{}) []interface{} {
 	return append(kvs, key, value)
 }

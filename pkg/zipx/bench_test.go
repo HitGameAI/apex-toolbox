@@ -18,9 +18,9 @@ import (
 
 // 不同大小的测试数据，模拟真实场景
 var (
-	benchSmallData  = bytes.Repeat([]byte("Hello, World! This is a test. "), 4)      // ~120B
-	benchMediumData = bytes.Repeat([]byte("Hello, World! This is a test. "), 500)    // ~15KB
-	benchLargeData  = bytes.Repeat([]byte("Hello, World! This is a test. "), 50000)  // ~1.5MB
+	benchSmallData  = bytes.Repeat([]byte("Hello, World! This is a test. "), 4)     // ~120B
+	benchMediumData = bytes.Repeat([]byte("Hello, World! This is a test. "), 500)   // ~15KB
+	benchLargeData  = bytes.Repeat([]byte("Hello, World! This is a test. "), 50000) // ~1.5MB
 )
 
 // benchSizes 预定义的测试数据大小

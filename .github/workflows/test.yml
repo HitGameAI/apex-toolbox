@@ -23,11 +23,12 @@ on:
 
 jobs:
   test:
-    uses: HitGameAI/deploy-pipeline/.github/workflows/go-library-test.yml@013c0e1efc2b97819ca13f44fe5432be79f58867
+    uses: HitGameAI/deploy-pipeline/.github/workflows/go-library-test.yml@fe59068c93c25b65ce4b9db6e8e5d801533e7d27
     with:
       # 平台按原仓库既有选择保留；要加回 windows/macos 直接改这一行
       # [EN] The platform set follows the repository's original choice
       platforms: '["ubuntu-latest"]'
+      coverage-upload: ${{ github.event_name != 'pull_request' }}
     secrets:
       # 显式映射而非 secrets: inherit —— inherit 跨账号调用时拿不到值
       # [EN] Mapped explicitly rather than with secrets: inherit, which yields nothing across accounts

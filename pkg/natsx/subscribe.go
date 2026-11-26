@@ -33,8 +33,8 @@ import (
 	"strings"
 	"time"
 
-	jsoniter "github.com/json-iterator/go"
 	"github.com/HitGameAI/apex-toolbox/pkg/syncx"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/nats-io/nats.go"
 )
 

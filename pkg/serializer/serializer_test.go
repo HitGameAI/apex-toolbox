@@ -350,7 +350,7 @@ func TestBackwardCompatibility(t *testing.T) {
 func TestCompression(t *testing.T) {
 	// 创建较大的测试消息
 	largeContent := string(make([]byte, 1000))
-	for _ = range largeContent {
+	for range largeContent {
 		largeContent = "这是一个用于测试压缩效果的较长消息内容。" + largeContent
 	}
 
