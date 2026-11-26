@@ -80,8 +80,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/HitGameAI/apex-toolbox/pkg/logger"
 	"github.com/HitGameAI/apex-toolbox/pkg/convert"
+	"github.com/HitGameAI/apex-toolbox/pkg/logger"
 	"github.com/HitGameAI/apex-toolbox/pkg/mathx"
 	"github.com/HitGameAI/apex-toolbox/pkg/syncx"
 	"github.com/redis/go-redis/v9"

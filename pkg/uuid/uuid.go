@@ -16,8 +16,8 @@ import (
 	"encoding/hex"
 	"strings"
 
-	"github.com/google/uuid"
 	"github.com/HitGameAI/apex-toolbox/pkg/convert"
+	"github.com/google/uuid"
 )
 
 // SameSubStr 创建多少个相同 子字符串的字符串

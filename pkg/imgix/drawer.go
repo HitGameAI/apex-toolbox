@@ -18,10 +18,10 @@ import (
 	"math"
 	"sync"
 
-	"github.com/disintegration/imaging"
-	"github.com/fogleman/gg"
 	"github.com/HitGameAI/apex-toolbox/pkg/mathx"
 	"github.com/HitGameAI/apex-toolbox/pkg/syncx"
+	"github.com/disintegration/imaging"
+	"github.com/fogleman/gg"
 )
 
 // GraphicsRenderer 结构体用于绘制面部特征

@@ -86,25 +86,25 @@ func TestToMap_WithoutTLS(t *testing.T) {
 func TestFromMap(t *testing.T) {
 	// 创建测试 map
 	data := map[string]interface{}{
-		"user_agent":       "Mozilla/5.0 Chrome",
-		"client_ip":        "172.16.0.50",
-		"remote_addr":      "172.16.0.50:8080",
-		"request_uri":      "/v1/users",
-		"query_string":     "page=1&limit=10",
-		"request_method":   "GET",
-		"request_host":     "api.example.com",
-		"origin":           "https://app.example.com",
-		"referer":          "https://app.example.com/dashboard",
-		"x_forwarded_for":  "203.0.113.1",
-		"x_real_ip":        "203.0.113.1",
+		"user_agent":        "Mozilla/5.0 Chrome",
+		"client_ip":         "172.16.0.50",
+		"remote_addr":       "172.16.0.50:8080",
+		"request_uri":       "/v1/users",
+		"query_string":      "page=1&limit=10",
+		"request_method":    "GET",
+		"request_host":      "api.example.com",
+		"origin":            "https://app.example.com",
+		"referer":           "https://app.example.com/dashboard",
+		"x_forwarded_for":   "203.0.113.1",
+		"x_real_ip":         "203.0.113.1",
 		"x_forwarded_proto": "https",
-		"accept_language":  "zh-CN,zh;q=0.9",
-		"accept_encoding":  "gzip, deflate, br",
-		"connection":       "Upgrade",
-		"upgrade":          "websocket",
-		"protocol":         "https",
-		"tls_version":      uint16(0x0304), // TLS 1.3
-		"tls_server_name":  "api.example.com",
+		"accept_language":   "zh-CN,zh;q=0.9",
+		"accept_encoding":   "gzip, deflate, br",
+		"connection":        "Upgrade",
+		"upgrade":           "websocket",
+		"protocol":          "https",
+		"tls_version":       uint16(0x0304), // TLS 1.3
+		"tls_server_name":   "api.example.com",
 	}
 
 	// 从 map 创建 RequestMetadata

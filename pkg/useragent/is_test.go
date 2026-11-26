@@ -222,10 +222,10 @@ func TestUserAgentIsCrOS(t *testing.T) {
 func TestUserAgentCheckOS_FuzzyMatch(t *testing.T) {
 	// 测试模糊匹配功能
 	ua := &UserAgent{oS: "Windows 10 Pro"}
-	
+
 	// 应该匹配 Windows
 	assert.True(t, ua.IsWindows())
-	
+
 	// 不应该匹配其他系统
 	assert.False(t, ua.IsLinux())
 	assert.False(t, ua.IsMacOS())

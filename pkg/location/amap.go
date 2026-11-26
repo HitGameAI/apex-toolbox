@@ -45,7 +45,7 @@ func amapSig(params url.Values, sig string) (sn string) {
 		len(params),
 	)
 	i := 0
-	for k, _ := range params {
+	for k := range params {
 		keys[i] = k
 		i += 1
 	}
